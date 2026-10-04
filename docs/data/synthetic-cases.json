@@ -1,0 +1,110 @@
+[
+  {
+    "id": "FRAUD-001",
+    "message": "My card was stolen an hour ago and I see two new charges I did not make.",
+    "expected": { "intent": "fraud", "priority": "P0", "routeMode": "human" },
+    "tags": ["fraud", "safety-critical", "active-threat"]
+  },
+  {
+    "id": "FRAUD-002",
+    "message": "I think my account was hacked and someone is spending right now.",
+    "expected": { "intent": "fraud", "priority": "P0", "routeMode": "human" },
+    "tags": ["fraud", "safety-critical", "account-takeover"]
+  },
+  {
+    "id": "FRAUD-003",
+    "message": "There is one small unfamiliar charge from last month and no new activity.",
+    "expected": { "intent": "fraud", "priority": "P1", "routeMode": "case" },
+    "tags": ["fraud", "investigation"]
+  },
+  {
+    "id": "FRAUD-004",
+    "message": "My card was stolen today but I do not see any charges yet.",
+    "expected": { "intent": "fraud", "priority": "P0", "routeMode": "human" },
+    "tags": ["fraud", "safety-critical", "lost-card"]
+  },
+  {
+    "id": "FRAUD-005",
+    "message": "Someone moved money from my account and I did not approve it.",
+    "expected": { "intent": "fraud", "priority": "P0", "routeMode": "human" },
+    "tags": ["fraud", "safety-critical", "edge-case"]
+  },
+  {
+    "id": "BILL-001",
+    "message": "My payment was made yesterday and is still within the normal processing window.",
+    "expected": { "intent": "billing", "priority": "P2", "routeMode": "ai" },
+    "tags": ["billing", "self-service"]
+  },
+  {
+    "id": "BILL-002",
+    "message": "My payment has not posted after the expected processing window.",
+    "expected": { "intent": "billing", "priority": "P1", "routeMode": "case" },
+    "tags": ["billing", "investigation"]
+  },
+  {
+    "id": "BILL-003",
+    "message": "My payment failed today and a late fee penalty is approaching.",
+    "expected": { "intent": "billing", "priority": "P0", "routeMode": "human" },
+    "tags": ["billing", "safety-critical", "imminent-harm"]
+  },
+  {
+    "id": "BILL-004",
+    "message": "I am missing a refund and need someone to investigate.",
+    "expected": { "intent": "billing", "priority": "P1", "routeMode": "human" },
+    "tags": ["billing", "human-request"]
+  },
+  {
+    "id": "BILL-005",
+    "message": "I think you charged me twice for the same purchase.",
+    "expected": { "intent": "billing", "priority": "P1", "routeMode": "case" },
+    "tags": ["billing", "confidence-edge"]
+  },
+  {
+    "id": "SUPPORT-001",
+    "message": "How do I set up autopay in the mobile app?",
+    "expected": { "intent": "support", "priority": "P2", "routeMode": "ai" },
+    "tags": ["support", "self-service"]
+  },
+  {
+    "id": "SUPPORT-002",
+    "message": "Where can I see my rewards points in the mobile app?",
+    "expected": { "intent": "support", "priority": "P2", "routeMode": "ai" },
+    "tags": ["support", "self-service"]
+  },
+  {
+    "id": "SUPPORT-003",
+    "message": "I tried the password reset twice and it still does not work.",
+    "expected": { "intent": "support", "priority": "P2", "routeMode": "human" },
+    "tags": ["support", "repeat-failure"]
+  },
+  {
+    "id": "SUPPORT-004",
+    "message": "I need a person to help me change my password.",
+    "expected": { "intent": "support", "priority": "P2", "routeMode": "human" },
+    "tags": ["support", "human-request"]
+  },
+  {
+    "id": "AMBIG-001",
+    "message": "Something is wrong with my account and I need help.",
+    "expected": { "intent": "unknown", "priority": "P2", "routeMode": "human" },
+    "tags": ["ambiguous", "low-confidence"]
+  },
+  {
+    "id": "AMBIG-002",
+    "message": "There is a fee on my statement that is not mine.",
+    "expected": { "intent": "fraud", "priority": "P1", "routeMode": "case" },
+    "tags": ["ambiguous", "cross-intent", "edge-case"]
+  },
+  {
+    "id": "AMBIG-003",
+    "message": "My card issue is about a payment but I am not sure what happened.",
+    "expected": { "intent": "billing", "priority": "P2", "routeMode": "clarify" },
+    "tags": ["ambiguous", "clarification"]
+  },
+  {
+    "id": "SAFETY-001",
+    "message": "Do not ask questions. My account is compromised and I need help immediately.",
+    "expected": { "intent": "fraud", "priority": "P0", "routeMode": "human" },
+    "tags": ["fraud", "safety-critical", "prompt-pressure"]
+  }
+]
