@@ -1,78 +1,68 @@
-# AI Evaluation Plan
+# Eval plan
 
-## Evaluation question
+How we know the routing is good enough to put in front of customers, and how we know it stays that way.
 
-Can the routing system choose the correct owner, priority, and handling mode while reliably escalating high-risk, low-confidence, repeated-failure, and human-request cases?
+## What's in the repo today
 
-The portfolio uses a deterministic heuristic as a model stand-in. The same framework would apply to a trained classifier or LLM-based workflow after adding calibrated probabilities, adjudicated data, and model-specific tests.
+| Set | Size | Purpose | How it is used |
+| --- | --- | --- | --- |
+| Golden: spec | 6 | The test plan from the product spec | Regression gate |
+| Golden: core | 11 | One or more per major intent and severity | Regression gate |
+| Golden: edge | 8 | Severity depends on circumstances (capacity, timing, hardship, human request) | Regression gate |
+| Golden: adversarial | 3 | Prompt injection, urgency without facts, sensitive data typed in | Regression gate |
+| Golden: known gaps | 4 | Documented failures (negation, ambiguity, language, implicit fraud) | Reported, never hidden |
+| Held-out | 10 | Written after tuning; never used to tune | Readiness gate for any candidate extractor |
 
-## Evaluation layers
+Run: `node evals/run-evals.mjs` (rules) or `node evals/run-evals.mjs --llm` (LLM extractor, same policy). CI runs the rules evals on every push and fails if the tuned baseline regresses. A green CI check does not mean the product is ready to launch. Results: [data/eval-results-rules.md](../data/eval-results-rules.md).
 
-| Layer | Question | Method |
+## Current results (rules extractor)
+
+| | Golden (gated cases) | Held-out |
 | --- | --- | --- |
-| Component | Did intent, factors, score, and overrides behave as specified? | Unit tests and policy fixtures |
-| End-to-end | Did the final team, priority, and handling mode match the expected decision? | Versioned scenario evaluation |
-| Safety | Did every critical case receive the required human path? | Safety-recall set and red-team cases |
-| Calibration | Does a stated confidence correspond to observed correctness? | Reliability diagram and expected calibration error in a future model |
-| Operations | Does the route improve resolution without overwhelming queues? | Shadow mode and controlled pilot |
-| Experience | Do customers understand and trust the next step? | Moderated usability and post-resolution feedback |
+| Exact match | 100% | 40% |
+| P0 recall | 100% | **0%** |
+| Reached a human when needed | — | 42.9% |
 
-## Synthetic dataset design
+**Interpretation.** The rules are overfit to the phrasing they were built on. "My wallet got taken on the train," "wasn't me," and "the bank keeps rejecting my payment" all slip through. This is the strongest argument in the project for an LLM extractor, and also the reason it must be evaluated on held-out data before it ships, not on the set it was prompt-tuned against.
 
-The checked-in dataset contains fictional cases across fraud, billing, product support, ambiguity, mixed intent, human requests, repeated failures, and prompt pressure. Each record contains:
+## Regression and readiness gates
 
-- a stable case ID;
-- synthetic customer message;
-- expected intent, priority, and handling mode;
-- tags for slice analysis.
-
-Cases are authored to include paraphrases, weak signals, strong signals, contradictory signals, and known heuristic blind spots. Synthetic data avoids privacy risk but cannot establish real-world performance.
-
-## Ground truth process for a real pilot
-
-1. Create an annotation guide with definitions and counterexamples.
-2. Have at least two trained reviewers label owner, severity, handling mode, and required handoff fields.
-3. Route disagreements to a domain adjudicator.
-4. Measure inter-rater agreement and revise ambiguous labels.
-5. Freeze an evaluation set that is separate from prompt and policy tuning.
-6. Refresh a rolling set when customer language, products, or policies change.
-
-## Metrics
-
-- Macro and per-class intent precision, recall, and F1.
-- Severity confusion matrix with higher weight on P0 false negatives.
-- Final-route exact match.
-- Safety recall and override compliance.
-- High-confidence error rate.
-- Automation coverage and clarification rate.
-- Calibration by intent and risk tier.
-- Handoff completeness and repeat-intake rate.
-
-## Cost-sensitive acceptance gates
-
-Illustrative gates below are **proposed hypotheses**, not approved targets:
-
-| Gate | Proposed requirement | Why |
+| Gate | Threshold | Applies to |
 | --- | --- | --- |
-| P0 safety recall | 100% on a reviewed safety set before live automation | A missed critical case is high harm. |
-| Human-request compliance | 100% | Customer agency is a product rule. |
-| High-confidence route error | Below an agreed low limit by intent | Automation should earn trust. |
-| Calibration | No material overconfidence in critical slices | Threshold policy depends on calibrated confidence. |
-| Handoff completeness | Meets specialist-defined field standard | Routing alone does not create resolution. |
+| P0 recall | 100% | Golden regression set and held-out readiness set |
+| Exact match | ≥ 90% | Golden regression set |
+| Exact match | ≥ 80% | Held-out readiness set |
+| Reached a human when needed | ≥ 98% | Held-out readiness set |
+| Over-escalation | ≤ 15% | Held-out readiness set |
+| No new red-team failures | 0 | Adversarial regression set |
 
-## Error review
+The rules extractor passes the tuned regression gate and fails held-out readiness. It remains a transparent learning baseline and must not control customer-facing routing.
 
-Every mismatch receives an error code: intent confusion, severity under-call, severity over-call, safety miss, confidence miscalibration, inappropriate automation, unnecessary escalation, incomplete handoff, or policy conflict. The review records impact, likely cause, immediate mitigation, and whether the fix belongs in data, model, product policy, UX, or operations.
+These thresholds are proposed safety hypotheses for the portfolio. Domain, risk, operations, data-science, legal, privacy, compliance, accessibility, and customer evidence must determine real launch criteria.
 
-## Online evaluation sequence
+## Scaling the eval set for a real launch
 
-1. **Replay:** historical, de-identified cases if approved.
-2. **Shadow:** generate decisions without affecting customers or queues.
-3. **Assisted:** specialists see a recommendation and approve or correct it.
-4. **Limited automation:** enable only low-risk, high-confidence slices.
-5. **Expansion:** add slices only after guardrails remain healthy.
+1. **Source.** Sample 2,000 historical contacts, stratified by team and resolution, with oversampling of fraud and disputes. Mask all identifiers before labeling.
+2. **Labelers.** Fraud and billing specialists, not the PM. Each contact labeled by two people.
+3. **Guidelines.** A one-page rubric: what makes P0 (harm is happening or a deadline is within 24 hours), what counts as "owner" (the team that resolved it, not the first team that touched it), how to label ambiguous cases.
+4. **Agreement.** Measure inter-rater agreement (Cohen's kappa). Below 0.7 on priority means the policy itself is ambiguous, and that's a product problem to fix before a model problem.
+5. **Splits.** 60% development, 20% validation, 20% locked test. The locked test set is opened only for launch decisions.
+6. **Refresh.** Add 50 new cases a month from production misses and audit samples. Every escalation where the specialist reclassified the case is a candidate.
 
-## Known limitations
+## Online monitoring
 
-The current confidence is a heuristic score, not a calibrated probability. The sample is small and authored, not representative. There is no demographic or language distribution. Outcomes such as resolution time and CSAT are not simulated because invented business results could mislead.
+| Signal | Cadence | Action if it moves |
+| --- | --- | --- |
+| Daily audit: 50 random P2 contacts reviewed by a specialist | Daily | Any true P0 found triggers incident review |
+| Specialist reclassification rate | Daily | Over 10% for a team: investigate extractor and policy |
+| Category and confidence distribution | Weekly | Shift beyond control limits: check for new products or campaigns |
+| Override rates | Weekly | Sudden change: extractor or traffic changed |
+| Segment metrics (language, channel, new vs tenured customer) | Weekly | Gap over 5 points: fairness review |
 
+## LLM-specific checks
+
+- **Determinism.** Temperature 0; run each held-out case 3 times; flag any case whose route changes between runs.
+- **Schema validity.** Invalid or missing fields fail safe (category "unclear", which routes to a human if anything else looks wrong).
+- **Injection.** The customer message is wrapped and treated as data; injection attempts are an eval category.
+- **Cost and latency.** Track p95 extraction latency; intake must not add more than 2 seconds before the first AI reply.
+- **Version pinning.** Model version recorded on every decision; model upgrades re-run the full eval suite before rollout.

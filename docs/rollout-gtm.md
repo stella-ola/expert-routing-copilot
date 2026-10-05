@@ -41,3 +41,22 @@ Use plain language: explain whether the system can help now, needs one more deta
 
 The team must be able to disable automation by intent, risk tier, model version, or channel; restore the prior queue path; preserve in-flight cases; and notify specialists. A critical safety miss, monitoring failure, unexpected queue overload, or material disparity pauses the affected slice.
 
+Illustrative triggers, which require operational approval before use:
+
+| Trigger | Immediate action | Accountable owner |
+| --- | --- | --- |
+| Any confirmed missed P0 after assisted mode | Revert the affected slice to human triage and begin incident review | On-call engineering and product |
+| P0 specialist wait breaches the approved urgent SLA | Route to the approved priority-callback fallback and alert workforce management | Support operations |
+| Specialist correction exceeds the agreed daily limit for a team | Stop automated routing for that team and inspect extractor and policy versions | Product and domain operations |
+| Extractor errors or latency breach the approved limit | Fall back to the rules extractor or human triage | Engineering |
+| Material language, channel, or accessibility disparity | Pause the affected slice and begin fairness and accessibility review | Product, risk, accessibility, and operations |
+
+## Launch readiness checklist
+
+- Held-out readiness criteria pass for the production candidate extractor.
+- Specialists approve the handoff schema and can correct decisions.
+- Monitoring covers customer outcomes, safety, queue capacity, segments, drift, and system health.
+- Privacy, security, risk, legal, compliance, and accessibility reviews are complete.
+- Customer disclosure and human-option language are approved.
+- Kill switch, fallback, incident response, and rollback have been exercised.
+- Exposure can be controlled by intent, risk tier, channel, and version.

@@ -1,106 +1,123 @@
 # Expert Routing Copilot
 
-An AI product management case study and interactive simulator for routing fictional credit-card support requests to AI self-service, a managed case, or a human specialist.
+**AI triage for customer support that knows when not to automate.** Expert Routing Copilot interprets a fictional customer request, separates ownership from urgency, applies deterministic safety policy, and prepares a handoff that lets a specialist begin without restarting intake.
 
-> **Portfolio simulation:** This project uses only synthetic scenarios and deterministic heuristics. Confidence values and evaluation results are simulated decision-support signals, not production model probabilities or real company performance claims.
+**[Try the simulator](https://stella-ola.github.io/expert-routing-copilot/)** · Fictional credit-card provider · Synthetic data and simulated results only
 
-## Why this project exists
+![Simulator routing a stolen-card message to a live fraud specialist](docs/img/simulator.png)
 
-Customers can lose time when support systems misunderstand their intent, underestimate urgency, send them to the wrong queue, or keep them in automation too long. Expert Routing Copilot explores a safer routing policy across three decisions:
+## In 30 seconds
 
-1. **Who owns the issue?** Fraud, billing, or product support.
-2. **How urgent is it?** P0, P1, or P2 based on harm, time sensitivity, blockage, and failed attempts.
-3. **Who should handle it?** AI, a clarifying step, a managed case, or a live human.
+- **Problem:** customers with fraud, billing, or product-support needs may be transferred, repeat themselves, wait in the wrong queue, or remain with automation too long.
+- **What I built:** a product strategy, deterministic routing policy, interactive simulator, structured handoff, 42-case eval harness, tradeoff lab, CI regression gate, rollout plan, and decision record.
+- **Core design decision:** the AI or rules layer **understands** the message; a deterministic, versioned policy **decides** severity and route. This keeps high-stakes decisions auditable and allows the understanding layer to improve independently.
+- **Most important result:** keyword rules reach 100% exact match on the gated cases they were tuned on but only 40% on a held-out set, with **0% held-out P0 recall**. The rules baseline is therefore **not launch-ready**. That failure is the evidence for testing a better extractor behind the same policy.
 
-The prototype makes those decisions visible and auditable. It also demonstrates where the policy can fail.
+## How it decides
 
-## Try the simulator
-
-Open [`docs/index.html`](docs/index.html) locally, or enable GitHub Pages from the repository's `/docs` folder.
-
-The simulator lets you:
-
-- run curated synthetic support scenarios or type a fictional message;
-- inspect detected intent, confidence proxy, risk factors, safety overrides, and route rationale;
-- adjust the clarify and auto-route confidence thresholds;
-- run the synthetic evaluation set and inspect mismatches;
-- review the structured human-handoff card.
-
-## Product strategy at a glance
-
-| Layer | Portfolio evidence |
-| --- | --- |
-| Problem and scope | [Product specification](docs/product-spec.md) |
-| Prioritization | [Prioritization](docs/prioritization.md) |
-| Metric hierarchy | [Metrics](docs/metrics.md) |
-| AI evaluation | [Evaluation plan](docs/evaluation-plan.md) |
-| Confidence policy | [Confidence and human handoff](docs/confidence-and-human-handoff.md) |
-| Failure analysis | [Failure analysis](docs/failure-analysis.md) |
-| Safety | [Responsible AI](docs/responsible-ai.md) |
-| Experimentation | [Experimentation](docs/experimentation.md) |
-| Discovery | [Research and validation](docs/research-validation.md) |
-| Launch | [Rollout, GTM, and adoption](docs/rollout-gtm.md) |
-| Sequencing | [Roadmap](docs/roadmap.md) |
-| Product judgment | [Decision log](docs/decision-log.md) |
-| Learning | [Retrospective](docs/retrospective.md) |
-
-## How the simulated decision works
-
-```mermaid
-flowchart LR
-    A["Synthetic customer message"] --> B["Intent signals"]
-    B --> C["Confidence proxy"]
-    A --> D["Risk factors"]
-    D --> E["Weighted severity"]
-    A --> F["Safety and human overrides"]
-    C --> G["Routing policy"]
-    E --> G
-    F --> G
-    G --> H["AI self-service"]
-    G --> I["Clarifying question"]
-    G --> J["Managed case"]
-    G --> K["Live specialist or triage"]
+```text
+message
+  → redact sensitive numbers
+  → extract structured facts
+  → calculate contextual risk
+  → apply safety and human overrides
+  → check specialist capacity
+  → select channel and prepare handoff
 ```
 
-The weighted risk score is:
+| Priority | Example | Default route |
+| --- | --- | --- |
+| **P0** | Stolen card with active unauthorized charges | Live specialist or priority callback |
+| **P1** | Payment outside the expected posting window | Managed case or expert chat |
+| **P2** | Routine rewards or product question | AI guidance, clarification, or requested human support |
 
-`harm × 35% + time sensitivity × 30% + blockage × 25% + failed attempts × 10%`
+The weighted score uses potential harm (35%), time sensitivity (30%), customer blockage (25%), and failed attempts (10%). Safety overrides beat the score. Human overrides change the channel without falsely inflating severity.
 
-Each factor is scored from 0 to 3 and normalized to 100. Safety rules override the numeric score. The confidence proxy controls whether the system routes, asks a clarifying question, or defers to human triage.
+## Evaluation results
 
-## Evaluation approach
+All cases and labels are synthetic and authored for this portfolio. They demonstrate the evaluation method; they do not establish production performance.
 
-The checked-in synthetic dataset covers fraud, billing, product support, ambiguous requests, explicit human requests, and repeated automation failure. The evaluation reports intent, priority, and route accuracy separately, plus safety recall and automation coverage. This prevents a high overall score from hiding a harmful miss.
+| Metric | Golden set: 32 cases | Held-out: 10 cases |
+| --- | ---: | ---: |
+| Exact match: team + priority + channel | 87.5% | 40% |
+| Exact match excluding four declared baseline gaps | 100% | 40% |
+| P0 recall | 77.8% | **0%** |
+| Reached a human when required | 95.2% | 42.9% |
 
-Run the local checks with:
+The CI workflow protects the tuned baseline from regression. It does **not** certify production readiness. The held-out readiness gate remains blocked until a candidate extractor achieves 100% P0 recall, at least 80% exact match, at least 98% appropriate human reach, and no new red-team failures.
+
+[Read every result](data/eval-results-rules.md) · [Evaluation plan](docs/evaluation-plan.md) · [Failure analysis](docs/failure-analysis.md)
+
+## Tradeoff lab
+
+![Tradeoff lab comparing missed urgent cases and live-specialist load](docs/img/tradeoff-lab.png)
+
+The simulator models 10,000 fictional contacts and lets a reviewer vary the P0 threshold, extraction error, specialist capacity, and safety overrides. It makes the central operational tradeoff visible: lowering the threshold protects recall but can overload specialists; raising it preserves capacity but can miss urgent customers. The population, queue model, and outputs are explicitly simulated assumptions.
+
+## Product and AI-PM artifacts
+
+| Area | Artifact |
+| --- | --- |
+| Hiring-manager overview | [Portfolio case study](docs/portfolio-case-study.md) |
+| Problem, users, policy, scope | [Product specification](docs/product-spec.md) |
+| System and decision flow | [Architecture](docs/architecture.md) |
+| Prioritization | [Prioritization](docs/prioritization.md) |
+| Sequencing | [Outcome-based roadmap](docs/roadmap.md) |
+| Outcome, input, guardrail, and AI metrics | [Metric hierarchy](docs/metrics.md) |
+| Golden, held-out, red-team, and online evals | [Evaluation plan](docs/evaluation-plan.md) |
+| Confidence and escalation | [Confidence and human handoff](docs/confidence-and-human-handoff.md) |
+| Failure taxonomy and FMEA | [Failure analysis](docs/failure-analysis.md) |
+| “How could this fail?” exercise | [Pre-mortem](docs/pre-mortem.md) |
+| Privacy, fairness, accessibility, oversight | [Responsible AI](docs/responsible-ai.md) |
+| Research assumptions and validation | [Research and validation](docs/research-validation.md) |
+| Shadow, assisted, and controlled tests | [Experimentation](docs/experimentation.md) |
+| Stakeholders, adoption, rollback | [Rollout, GTM, and adoption](docs/rollout-gtm.md) |
+| Synthetic business-case model | [Operational economics](docs/operational-economics.md) |
+| Material product tradeoffs | [Decision log](docs/decision-log.md) |
+| Before-and-after learning | [Retrospective](docs/retrospective.md) |
+| Two-minute walkthrough | [Demo script](docs/demo-script.md) |
+
+## Run locally
+
+Requires Node 20 or newer and no installed dependencies.
 
 ```bash
 npm test
+npm run evals
+npm run serve
 ```
+
+The optional LLM extractor uses the same structured feature contract and deterministic policy:
+
+```bash
+ANTHROPIC_API_KEY=your_key npm run evals:llm
+```
+
+Never place an API key in the repository. LLM output must be evaluated repeatedly on the locked held-out set before any recommendation to advance beyond shadow mode.
 
 ## Repository map
 
 ```text
 .
 ├── README.md
-├── archive/original-simulator/   # preserved uploaded source
 ├── docs/
-│   ├── index.html                # GitHub Pages simulator
-│   ├── app.js, router.js, styles.css
-│   ├── data/synthetic-cases.json
-│   └── *.md                      # PM and AI-PM artifacts
-├── tests/router.test.mjs
-└── package.json
+│   ├── index.html                 # GitHub Pages simulator and tradeoff lab
+│   ├── app/engine.js              # extraction, risk, policy, evals, simulation
+│   ├── app/golden-set.js          # 32 golden and 10 held-out cases
+│   └── *.md                       # product and AI-PM artifacts
+├── evals/
+│   ├── run-evals.mjs              # evaluation runner and regression gate
+│   └── llm-extractor.mjs          # optional candidate understanding layer
+├── data/                           # generated synthetic eval results
+├── tests/                          # deterministic policy tests
+└── archive/                        # preserved earlier prototypes and source spec
 ```
 
-## Boundaries and assumptions
+## Boundaries
 
-- All people, accounts, transactions, queues, SLAs, and outcomes are fictional.
-- The classifier is a transparent heuristic stand-in, not a trained AI model.
-- The project does not process real personal data or perform account actions.
-- Thresholds, severity weights, queue policies, and target metrics require validation with customers, support specialists, risk, legal, compliance, and operations.
-- Simulated evaluation results show how to evaluate a future system; they do not prove production readiness.
-
-## What this demonstrates
-
-This project is intentionally more than a UI mockup. It demonstrates problem framing, scope control, prioritization, metric design, threshold strategy, human-in-the-loop design, failure analysis, safety thinking, experimentation, rollout planning, and explicit product decisions.
+- No real customer, account, transaction, queue, or company data is used.
+- The rules confidence value is an inspectable proxy, not a calibrated probability.
+- The project performs no authentication, card lock, payment, refund, dispute, or other account action.
+- Targets, SLAs, cost assumptions, risk weights, and thresholds are hypotheses requiring domain, customer, operations, risk, privacy, legal, compliance, security, and accessibility review.
+- The optional LLM extractor is a candidate, not a shipped component.
+- This project is not affiliated with any company.

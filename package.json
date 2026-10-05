@@ -1,11 +1,14 @@
 {
   "name": "expert-routing-copilot",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "description": "Synthetic AI support-routing product case study, simulator, and evaluation harness.",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "evaluate": "node tests/evaluate.mjs"
+    "evals": "node evals/run-evals.mjs",
+    "evals:llm": "node evals/run-evals.mjs --llm",
+    "serve": "python3 -m http.server 4173 --directory docs"
   },
   "engines": {
     "node": ">=20"

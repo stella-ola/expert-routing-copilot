@@ -1,115 +1,119 @@
-# Expert Routing Copilot Product Specification
+# Product spec: Expert Routing Copilot
 
-## Purpose and status
+> Fictional credit-card provider. Synthetic data only. Not affiliated with any company.
+> Changes since the original spec are marked **[v1]** and explained in [decision-log.md](decision-log.md).
 
-This portfolio project defines and demonstrates a triage layer for a fictional credit-card provider. It classifies a customer request, assesses urgency and risk, and selects the safest next step: AI self-service, a clarifying question, a managed case, expert chat, or live human support.
+**Evidence status.** The current problem framing, contact mix, thresholds, weights, service levels, and expected outcomes are product hypotheses. They are not findings from a real company or production dataset. The prototype is designed to make those assumptions testable.
 
-**Status:** interactive prototype. **Data:** synthetic only. **Evidence boundary:** the problem and target outcomes are hypotheses informed by common support patterns, not findings from a real company or production dataset.
+## 1. Overview
 
-## Problem
+Expert Routing Copilot is an AI intake layer for customer chats and calls. It works out what the customer needs, how urgent it is, and who owns it, then routes to the best next step: AI self-service, a managed case, expert chat, a live specialist, or a callback.
 
-Customers can be transferred repeatedly, explain their issue more than once, or remain in automation after it is clear that a person is needed. Specialists can also lose time rebuilding context that intake should have captured. The product hypothesis is that better intent, severity, confidence, and handoff decisions can reduce time to resolution without increasing customer harm.
+| | |
+| --- | --- |
+| Problem | Customers spend too long navigating support, repeat themselves, and reach the wrong team. |
+| Core value | Faster resolution with safe human escalation and handoffs specialists can act on. |
+| Channels | Chat first for routine work. Live transfer or callback for urgent or unresolved work. |
+| Data boundary | Synthetic, masked data only. |
 
-## Users
+## 2. Problem and assumptions
 
-| User | Need | Evidence status |
+Customers with fraud, billing, or product needs get transferred repeatedly, explain their issue more than once, and wait. Specialists lose time collecting basic facts that intake could have captured.
+
+Assumptions (not claims about any real company): the issuer wants shorter time to resolution, more correct first routes, fewer unnecessary transfers, protection for customers in high-risk situations, and complete case context for specialists.
+
+## 3. Users
+
+| User | Job to be done | What they lose today |
 | --- | --- | --- |
-| Customer | Reach the right resolution path quickly and avoid repetition. | Assumption to validate through interviews and journey analysis. |
-| Support specialist | Receive complete, trustworthy context and a clear priority. | Assumption to validate through workflow observation. |
-| Support operations | Balance resolution quality, queue capacity, service levels, and cost. | Assumption to validate with operational data. |
-| Risk and compliance | Prevent unsafe automation and protect sensitive information. | Must be validated before any real deployment. |
+| Customer in trouble (fraud, failing payment) | "Stop the damage now." | Potential delay while the request is understood and routed. |
+| Customer with a routine question | "Get an answer without waiting." | Potential wait for work that may be safely handled through self-service. |
+| Specialist (fraud, billing) | "Start solving, not interviewing." | Potential time re-collecting facts that intake could capture. |
+| Support operations lead **[v1]** | "Keep queues healthy and urgent work first." | No signal on urgency until the customer is already on the line. |
+| Risk and compliance **[v1]** | "Every automated decision is explainable." | Opaque routing rules spread across IVR config. |
 
-## Product principles
+## 4. Request categories
 
-1. **Safety overrides efficiency.** Active fraud, account compromise, and imminent harm bypass normal automation.
-2. **Confidence changes behavior.** Uncertainty should produce clarification or deferral, not an overconfident route.
-3. **Customers can opt out.** A direct request for a person is honored.
-4. **Two failed attempts are enough.** Repeated automation failure triggers a human path.
-5. **The handoff is part of the product.** A transfer without usable context is not a successful route.
-6. **Severity is contextual.** The issue category alone does not determine urgency.
-
-## Request taxonomy
-
-| Category | Examples | Default owner |
+| Category | Examples | Default path |
 | --- | --- | --- |
-| Fraud | Lost or stolen card, unrecognized activity, account takeover | Fraud specialist |
-| Billing | Payment failure, posting delay, fee, interest, refund, statement issue | Billing team |
-| Product support | Password, rewards, app navigation, autopay, card features | AI or product-support expert |
-| Unknown or mixed | Insufficient or contradictory information | Human triage or clarification |
+| Fraud | Lost or stolen card, unfamiliar charges, account takeover | AI intake, then fraud specialist: live or priority callback |
+| Billing | Failed or unposted payment, fees, interest, refunds, balance | AI explains, opens a case, or routes live, by severity |
+| Product support | Password, rewards, autopay, app how-to | AI resolves in chat; expert chat if stuck |
 
-## Decision sequence
+## 5. Decision sequence
 
-1. Detect candidate intent and safe-to-use signals.
-2. Estimate a confidence proxy and identify ambiguity.
-3. Score potential harm, time sensitivity, customer blockage, and failed attempts.
-4. Apply safety, repeated-failure, and customer-request overrides.
-5. Select the owner, priority, channel, and case requirement.
-6. Create an auditable decision rationale and handoff summary.
+Every interaction is evaluated in this order: **issue → owner → severity → can the AI resolve it safely → channel and case**. The simulator's decision trace shows each step.
 
-## Severity policy
+**[v1] Architecture rule:** the AI *understands*; the policy *decides*. Feature extraction (rules today, an LLM next) produces structured facts. A deterministic, versioned policy produces priority and route. See [decision-log.md](decision-log.md#d1).
 
-| Priority | Meaning | Default action |
-| --- | --- | --- |
-| P0 | Immediate or rapidly increasing harm | Live specialist or priority callback |
-| P1 | Investigation is required but can wait briefly | Managed case or expert chat |
-| P2 | Routine, informational, or safe self-service | AI guidance or guided chat |
+## 6. Severity policy
 
-The prototype uses a 0–3 factor scale and the formula:
+Severity depends on circumstances, timing, financial impact, and blockage, not only category. The same unposted payment is P2 inside the processing window and P1 after it.
 
-`(harm ÷ 3 × 35) + (time ÷ 3 × 30) + (blockage ÷ 3 × 25) + (failed attempts ÷ 3 × 10)`
+| Priority | Meaning | Examples | Default action |
+| --- | --- | --- | --- |
+| P0 | Immediate harm | Active unauthorized charges, stolen card, account takeover, failed payment due today | Live specialist or priority callback |
+| P1 | Needs investigation, can wait briefly | Payment not posted after window, incorrect fee, missing refund, old unfamiliar charge, lost card with no charges | Case with specialist follow-up, chat-first |
+| P2 | Routine | Payment inside window, balance question, password help | AI resolves in chat |
 
-Score bands are P2 from 0–34, P1 from 35–69, and P0 from 70–100. Business rules can set a minimum P1 for issues that require investigation. Safety overrides can force P0.
+## 7. Risk score
 
-## Confidence and handling policy
+Each factor is scored 0 to 3.
 
-The default simulated thresholds are:
+| Factor | Weight |
+| --- | --- |
+| Potential harm | 35% |
+| Time sensitivity | 30% |
+| Customer blockage | 25% |
+| Failed AI attempts | 10% |
 
-- below 0.60: human triage;
-- 0.60–0.84: ask a clarifying question;
-- 0.85 and above: eligible for automated routing;
-- any safety override, explicit human request, or two failed attempts: human handling regardless of confidence.
+`score = harm/3×35 + time/3×30 + blockage/3×25 + attempts/3×10`. 0–34 → P2, 35–69 → P1, 70–100 → P0.
 
-These thresholds are assumptions. They must be tuned by error cost, issue type, calibration quality, queue capacity, and customer outcomes.
+**Safety overrides beat the score.** Account takeover, stolen card, lost card with unrecognized charges, active unauthorized activity, or a failed payment with an imminent penalty is always P0.
 
-## Functional requirements
+**Human overrides change the channel, not the severity.** Two failed AI attempts, an explicit request for a person, AI confidence below 0.6, or an unsupported language bring in a human.
 
-- Accept a synthetic support message.
-- Return intent, team, confidence proxy, severity, factor scores, route, and rationale.
-- Make every override visible.
-- Allow a reviewer to adjust confidence thresholds.
-- Display a structured handoff summary.
-- Evaluate the policy against a versioned synthetic scenario set.
-- Flag mismatches instead of hiding them.
+## 8. Channel policy
 
-## Non-functional and safety requirements
+| Situation | Channel |
+| --- | --- |
+| P0, specialist capacity available | Live transfer |
+| P0, capacity constrained | Priority callback with an operations-approved urgent SLA; 10 minutes is the current simulated assumption |
+| P1 | Case with async follow-up in chat; expert chat if a human override applies **[v1]** |
+| P2 with a human override | Expert chat **[v1: was live transfer]** |
+| P2, intent or key fact unclear | AI asks one clarifying question **[v1]** |
+| P2 otherwise | AI resolves in chat |
 
-- Do not request or store full card numbers, passwords, PINs, Social Security numbers, or bank routing numbers.
-- Keep the prototype client-side with no real account integration.
-- Provide keyboard access, readable contrast, and responsive layouts.
-- Log policy version, model or heuristic version, thresholds, inputs, and overrides in a real implementation.
-- Maintain an immediate fallback when upstream classification or routing is unavailable.
+## 9. Journeys
 
-## Out of scope
+**Fraud.** Customer reports a stolen card or strange charges. AI detects fraud intent, confirms authentication, and gathers safe facts: which transaction, when, whether more are appearing, and contact preference. It never asks for a full government identifier, password, PIN, full card number, or bank-routing number, and it strips sensitive number patterns if the customer types them **[v1]**. The prototype recommends the approved card-security workflow but performs no account action. It opens a structured synthetic case and routes straight to fraud, skipping product support.
 
-- Real phone integration, authentication, customer accounts, transactions, or account actions.
-- A trained custom model or claims of production accuracy.
-- Real specialist queue management or service-level guarantees.
-- Final legal, compliance, fairness, accessibility, or security approval.
+**Billing.** AI checks the processing window and timing, then: P2, explains when the payment will post; P1, opens a billing case; P0, routes to a billing specialist when a payment is failing against a deadline or the customer describes hardship with a deadline.
 
-## Success criteria for the portfolio prototype
+**Product support.** AI resolves how-to questions, watches for fraud or billing signals that should reroute, and brings in expert chat after two failed attempts, on request, or at low confidence.
 
-- The routing policy is understandable without reading code.
-- Safety and uncertainty visibly change the route.
-- The evaluation set contains both passing and failing cases.
-- Metrics distinguish customer outcome, model quality, operational load, and safety.
-- Every simulated result and unvalidated assumption is clearly labeled.
+## 10. Handoff summary
 
-## Open questions
+The specialist should verify, not restart. Fields: customer reference and authentication status; issue and team; severity and risk score; plain-language summary; facts gathered; actions already taken; AI confidence and rationale; recommended next step. Handoff completeness is a measured outcome (see [metrics.md](metrics.md)).
 
-- Which fields let each specialist begin work without repeating intake?
-- Which issues require deterministic rules rather than model judgment?
-- What error costs and thresholds apply by intent and severity?
-- How do customers describe mixed fraud and billing issues in their own words?
-- What is the operational capacity for clarification, triage, and priority callbacks?
-- Which protected or vulnerable groups could experience systematically worse routing?
+## 11. Scope
 
+| Built | Deferred |
+| --- | --- |
+| Chat-first routing simulator | Phone integration, live accounts |
+| Fraud, billing, product classification | Real customer data or account actions |
+| Risk score, overrides, P0/P1/P2 | Production authentication and compliance workflows |
+| Channel selection and case flag | Real queue management |
+| Structured handoff | Training a custom model |
+| Golden and held-out eval sets, CI gate **[v1]** | Real-world metric claims |
+| Tradeoff lab (simulated population) **[v1]** | |
+| Optional LLM extractor behind the same policy **[v1]** | |
+
+## 12. Open questions
+
+1. What does each specialist need to start resolving immediately? (Validate the handoff fields with five fraud and five billing specialists.)
+2. Which consumer-protection, billing-error, unauthorized-use, AI-disclosure, audit, and record-retention requirements apply? Confirm the complete set with qualified legal and compliance partners.
+3. Which thresholds and overrides fit real outcomes? (Calibrate on historical contacts with known resolutions.)
+4. What SLAs apply to P0, P1, P2?
+5. How should the system detect frustration and repeated failure across sessions, not just within one?
+6. What share of real contacts are in a language the AI intake does not support?

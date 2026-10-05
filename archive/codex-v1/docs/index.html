@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A synthetic AI support-routing simulator and product case study.">
+  <title>Expert Routing Copilot</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Expert Routing Copilot home">
+      <span class="brand-mark">ER</span>
+      <span><strong>Expert Routing Copilot</strong><small>AI PM portfolio simulation</small></span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#simulator">Simulator</a>
+      <a href="#evaluation">Evaluation</a>
+      <a href="product-spec.md">Product docs</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Transparent routing decisions</p>
+        <h1>Get customers to the right help before support becomes the problem.</h1>
+        <p class="hero-copy">This interactive prototype separates intent, urgency, confidence, and safety so a reviewer can see why a request goes to AI, a managed case, or a person.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#simulator">Run a scenario</a>
+          <a class="button secondary" href="evaluation-plan.md">Read the eval plan</a>
+        </div>
+      </div>
+      <div class="hero-panel" aria-label="Prototype boundaries">
+        <span class="status-dot"></span>
+        <p><strong>Simulation, not production AI</strong></p>
+        <p>All cases, confidence values, outcomes, and metrics are synthetic. The classifier is a transparent rules-based stand-in designed to demonstrate product policy.</p>
+      </div>
+    </section>
+
+    <section class="section" id="simulator">
+      <div class="section-heading">
+        <div><p class="eyebrow">Interactive prototype</p><h2>Routing simulator</h2></div>
+        <p>Choose a synthetic case or type your own fictional message. Do not enter real personal or financial information.</p>
+      </div>
+
+      <div class="scenario-list" id="scenario-list" aria-label="Synthetic example scenarios"></div>
+
+      <div class="simulator-grid">
+        <section class="panel intake-panel" aria-labelledby="intake-title">
+          <div class="panel-heading"><span class="step">1</span><div><h3 id="intake-title">Customer request</h3><p>Synthetic text only</p></div></div>
+          <label for="message">Customer message</label>
+          <textarea id="message" rows="5" spellcheck="true"></textarea>
+          <button class="button primary full" id="run" type="button">Run routing decision</button>
+
+          <div class="thresholds">
+            <div class="threshold-heading"><h4>Confidence policy</h4><span>Adjustable assumption</span></div>
+            <label for="clarify-threshold">Below this → human triage <output id="clarify-value">60%</output></label>
+            <input id="clarify-threshold" type="range" min="40" max="75" value="60" step="5">
+            <label for="auto-threshold">At or above this → eligible to auto-route <output id="auto-value">85%</output></label>
+            <input id="auto-threshold" type="range" min="70" max="95" value="85" step="5">
+            <p class="helper">Between the two thresholds, the system asks a clarifying question. Safety and human-request overrides always win.</p>
+          </div>
+        </section>
+
+        <section class="panel decision-panel" aria-labelledby="decision-title" aria-live="polite">
+          <div class="panel-heading"><span class="step">2</span><div><h3 id="decision-title">Decision</h3><p id="decision-subtitle">Waiting for a request</p></div></div>
+          <div class="decision-hero" id="decision-hero">
+            <div><span class="priority" id="priority">P0</span><h3 id="route">Live specialist</h3><p id="reason"></p></div>
+            <div class="score-ring" id="score-ring"><span id="score">0</span><small>risk</small></div>
+          </div>
+
+          <div class="decision-stats">
+            <div><span>Intent</span><strong id="intent">–</strong></div>
+            <div><span>Confidence proxy</span><strong id="confidence">–</strong></div>
+            <div><span>Handling mode</span><strong id="mode">–</strong></div>
+          </div>
+
+          <div class="signals"><h4>Detected signals</h4><div class="chips" id="signals"></div></div>
+          <div class="override" id="override" hidden></div>
+        </section>
+      </div>
+
+      <div class="detail-grid">
+        <section class="panel">
+          <div class="panel-heading"><span class="step">3</span><div><h3>Risk factors</h3><p>Weighted, then normalized to 100</p></div></div>
+          <div class="factor-list" id="factor-list"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-heading"><span class="step">4</span><div><h3>Specialist handoff</h3><p>Only synthetic context</p></div></div>
+          <dl class="handoff" id="handoff"></dl>
+        </section>
+      </div>
+    </section>
+
+    <section class="section evaluation" id="evaluation">
+      <div class="section-heading">
+        <div><p class="eyebrow">Offline evaluation</p><h2>Synthetic eval set</h2></div>
+        <p>These results test this heuristic prototype. They are not production benchmarks.</p>
+      </div>
+      <div class="metric-grid" id="metrics"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Case</th><th>Expected</th><th>Actual</th><th>Result</th></tr></thead>
+          <tbody id="eval-rows"></tbody>
+        </table>
+      </div>
+      <p class="helper" id="eval-note"></p>
+    </section>
+
+    <section class="section artifact-section">
+      <div class="section-heading"><div><p class="eyebrow">Product artifacts</p><h2>Follow the product judgment</h2></div><p>The documentation distinguishes evidence, assumptions, decisions, and next validation steps.</p></div>
+      <div class="artifact-grid">
+        <a href="prioritization.md"><span>01</span><strong>Prioritization</strong><small>Why these capabilities come first</small></a>
+        <a href="metrics.md"><span>02</span><strong>Metric hierarchy</strong><small>Outcome, inputs, guardrails</small></a>
+        <a href="evaluation-plan.md"><span>03</span><strong>Evaluation plan</strong><small>Offline and online quality checks</small></a>
+        <a href="failure-analysis.md"><span>04</span><strong>Failure analysis</strong><small>What breaks and why it matters</small></a>
+        <a href="responsible-ai.md"><span>05</span><strong>Responsible AI</strong><small>Safety, privacy, and oversight</small></a>
+        <a href="decision-log.md"><span>06</span><strong>Decision log</strong><small>Tradeoffs made explicit</small></a>
+      </div>
+    </section>
+  </main>
+
+  <footer><p>Designed as a portfolio case study by Stella Mbila-Uma · Synthetic data only · <a href="../README.md">Repository README</a></p></footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

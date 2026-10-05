@@ -1,46 +1,50 @@
-# Retrospective
+# What v0 got wrong
 
-## What is strong
+The first prototype (kept in [`archive/original-simulator/`](../archive/original-simulator/)) looked finished. Reviewing it against its own spec showed it wasn't. Writing this down because the gaps taught more than the demo did.
 
-- The project begins with a customer and operational problem rather than “use AI.”
-- It separates owner, severity, confidence, and handling mode.
-- Safety overrides and a human-request path are first-class product requirements.
-- The handoff summary treats downstream specialist effectiveness as part of the experience.
-- Synthetic data and assumptions are clearly labeled.
-- The simulator connects product policy to executable logic and a visible evaluation set.
+## The gaps
 
-## What changed during the portfolio build
+| v0 behavior | Why it's a problem | v1 fix |
+| --- | --- | --- |
+| Risk scores were hardcoded per route (90, 82, 48, 18) | The spec defines a weighted formula. v0 displayed a score the formula would never produce: the P1 factors shown (2, 1, 1, 0) compute to 41.7, but the UI said 48; P2 factors compute to 8.3, UI said 18. A reviewer who checks the math stops trusting everything else. | Score computed from factors every time; the UI shows the points each factor contributes |
+| Any mention of "unrecognized" was P0 | The spec's own test case (small unfamiliar charge from last month) should be P1. v0 would have failed it. | Timing is a separate signal; old unrecognized charges score P1 |
+| No failed-attempts input, no "ask for a human" handling | Two of the spec's overrides couldn't be demonstrated | Attempts control, human-request detection, both shown in the trace |
+| No confidence | The channel policy depends on "AI confident," but nothing measured it | Confidence from evidence strength minus ambiguity; low confidence brings in a human |
+| No capacity input | "Priority callback when capacity is constrained" was unreachable | Capacity control; P0 switches to callback |
+| Customer-typed card numbers passed straight through | Handoff and logs would contain sensitive data | Redaction before anything else |
+| Six test scenarios, run by eye | No way to know if a change broke something | 32-case golden set, 10-case held-out set, CI gate |
+| Same logic duplicated in React and in plain HTML | The two copies could drift | One engine module used by the page and the eval runner |
 
-The original specification already covered the problem, customer journeys, severity, risk scoring, channels, handoffs, prototype scope, and initial metrics. The original simulator rendered four keyword-driven routes with fixed scores. The portfolio upgrade preserved that source and added calculated risk factors, a confidence policy, clarification and human-triage behavior, adjustable thresholds, safety and human overrides, a synthetic eval harness, automated tests, and a decision record.
+## Lessons
+
+1. **Prototype the logic, not just the screen.** A convincing UI over hardcoded outputs proves the layout, not the product.
+2. **Test the spec against itself.** Running the spec's own scenarios through v0 surfaced the gaps in an afternoon.
+3. **A number that matches nothing is worse than no number.** Showing a precise-looking score that doesn't follow the published formula undermines the formula.
+4. **Tuning is not evaluating.** v1's rules scored 100% on the cases used to build them and 40% on new ones. Without a held-out set I would have shipped a false sense of quality.
+
+## What the combined version adds
+
+The first portfolio upgrade corrected the hardcoded logic and added confidence bands, human-request handling, visible safety overrides, a structured handoff, a small synthetic evaluation set, and a full set of PM artifacts. The combined version keeps those strengths and adds:
+
+- one shared engine for the simulator and eval runner;
+- sensitive-number redaction before extraction or display;
+- explicit authentication, failed-attempt, and capacity context;
+- 32 golden cases plus 10 locked held-out cases;
+- adversarial, language, negation, ambiguity, and implicit-fraud tests;
+- a CI regression gate that is explicitly separated from readiness;
+- a tradeoff lab for threshold, extraction-error, capacity, and override assumptions;
+- an optional LLM extractor behind the same deterministic policy;
+- a pre-mortem, operational economics, portfolio case study, and demo narrative.
 
 ## What remains unproven
 
-- The problem’s frequency and business impact.
-- The taxonomy’s coverage of real customer language.
-- The risk weights, score bands, confidence thresholds, and service levels.
-- The usefulness and safety of each handoff field.
-- Real model quality, calibration, robustness, fairness, and drift.
-- Queue impact, customer trust, specialist adoption, and causal business outcomes.
+- The frequency, severity, and business impact of the routing problem.
+- Whether customers and specialists understand and trust the experience.
+- Whether the taxonomy and labels match expert judgment.
+- Whether the weights, thresholds, callback policy, and handoff fields improve real outcomes.
+- Whether an LLM or another extractor clears readiness consistently across repeated runs and customer slices.
+- Real calibration, robustness, fairness, drift, queue impact, adoption, and causal business outcomes.
 
-## What I would do next
+## Recommendation
 
-1. Interview customers and observe specialists to validate the journey and handoff.
-2. Build an annotation guide and adjudicate a small approved dataset.
-3. Review safety and data policy with fraud, risk, privacy, compliance, security, and accessibility partners.
-4. Establish current routing, transfer, repeat-intake, and resolution baselines.
-5. Compare rules-only, model-only, and hybrid approaches offline.
-6. Run shadow mode before exposing any recommendation to a specialist or customer.
-
-## Product lessons
-
-- A confidence number matters only when it changes behavior and has been calibrated.
-- A correct intent does not guarantee a correct route; context determines severity and channel.
-- Automation coverage is an output, not the goal.
-- Human handoff is not a failure when it is timely, informed, and appropriate.
-- Synthetic prototypes are valuable for clarifying policy, but they cannot substitute for representative data and real workflow validation.
-- Showing known failures is more credible than optimizing a demo to appear perfect.
-
-## Portfolio interview framing
-
-“I treated routing as a product-policy problem, not just a classification problem. I separated intent, urgency, confidence, and handling mode; made safety and customer choice override automation; created an eval set with deliberate failure cases; and defined how I would validate the workflow before any production model or rollout.”
-
+Do not tune the rules to the held-out cases. Keep them locked, run candidate extractors through the same policy, and advance only to shadow mode after the readiness criteria, governance reviews, monitoring, human fallback, and rollback controls are in place.

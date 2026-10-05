@@ -36,7 +36,7 @@ The first experiments should reduce uncertainty about the problem and policy, no
 
 **Hypothesis:** visible recommendations and summaries reduce specialist intake effort without creating automation bias.
 
-- Design: randomize eligible cases to current workflow or recommendation-plus-handoff.
+- Design: use contact-level randomization for handoff usability measures that do not materially change shared queues. Use a balanced switchback design by time block for queue time and end-to-end resolution, because treatment and control share specialist capacity and can interfere with each other.
 - Primary outcome: time from assignment to first meaningful action.
 - Secondary outcomes: correction rate, handoff completeness, repeat-intake rate.
 - Guardrails: safety incidents, queue time, agent-reported trust, customer complaints.
@@ -54,6 +54,7 @@ The first experiments should reduce uncertainty about the problem and policy, no
 
 - Define eligibility, sample size, duration, and stopping rules before launch.
 - Randomize at a level that avoids cross-treatment contamination.
+- Preserve a small long-term holdout after the main pilot to test whether gains persist and whether teams adapt around the product.
 - Report intent, severity, channel, and customer slices rather than only an aggregate.
 - Treat safety metrics as gates, not tradeable secondary outcomes.
 - Do not claim causality from the current synthetic simulator.
@@ -61,4 +62,3 @@ The first experiments should reduce uncertainty about the problem and policy, no
 ## Threshold experiment
 
 The simulator’s adjustable confidence bands show the expected tradeoff: lowering the auto threshold may increase automation coverage while increasing incorrect routes; raising it may reduce error while increasing clarification and human load. A real decision would use calibrated confidence, error costs, queue capacity, and confidence intervals.
-

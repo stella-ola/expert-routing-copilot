@@ -1,55 +1,63 @@
-# Architecture and Decision Flow
+# Architecture
 
-## Prototype architecture
+## System
+
+```mermaid
+flowchart LR
+    C[Customer message] --> R[Redaction<br/>card numbers, SSNs removed]
+    R --> X{Feature extractor}
+    X -->|v1| XR[Rules extractor]
+    X -->|v1.1| XL[LLM extractor]
+    XR --> F[Structured features<br/>category, confidence, flags, timing]
+    XL --> F
+    F --> S[Risk scoring<br/>harm, time, blockage, attempts]
+    S --> P[Routing policy<br/>versioned, deterministic]
+    P --> O1[AI resolves in chat]
+    P --> O2[AI asks one question]
+    P --> O3[Case + async follow-up]
+    P --> O4[Expert chat]
+    P --> O5[Live specialist]
+    P --> O6[Priority callback]
+    P --> H[Handoff card + decision trace]
+    H --> L[(Decision log<br/>policy + extractor version)]
+    L --> M[Metrics + eval dashboards]
+```
+
+The split between the extractor (understanding) and the policy (deciding) is the core design choice: the extractor can change (rules, an LLM, a future fine-tuned model) without changing what "urgent" means. Both extractors emit the same feature shape, which also makes the rules extractor the fallback if the LLM is slow or down.
+
+## Routing decision
 
 ```mermaid
 flowchart TD
-    UI["Static client interface"] --> CL["Transparent intent heuristic"]
-    UI --> RF["Risk factor extraction"]
-    CL --> CP["Confidence policy"]
-    RF --> RS["Weighted risk score"]
-    UI --> OV["Safety and human overrides"]
-    CP --> RE["Routing engine"]
-    RS --> RE
-    OV --> RE
-    RE --> HC["Handoff card"]
-    RE --> EV["Synthetic evaluation"]
-    DS["Versioned synthetic cases"] --> EV
+    A[Features + context] --> B[Compute risk score 0-100]
+    B --> C{Score band}
+    C -->|70+| P0[P0]
+    C -->|35-69| P1[P1]
+    C -->|0-34| P2[P2]
+    P1 --> SO{Safety override?<br/>takeover, stolen card,<br/>active fraud, payment failing<br/>against a deadline}
+    P2 --> SO
+    SO -->|yes| P0
+    SO -->|no| HO{Human override?<br/>asked for a person,<br/>2+ failed attempts,<br/>low confidence,<br/>unsupported language}
+    P0 --> CAP{Specialist capacity}
+    CAP -->|available| LIVE[Live transfer]
+    CAP -->|constrained| CB[Priority callback]
+    HO -->|yes| EC[Expert chat]
+    HO -->|no, P1| CASE[Case + async follow-up]
+    HO -->|no, P2| CL{Key fact missing?}
+    CL -->|yes| Q[AI asks one question]
+    CL -->|no| AI[AI resolves in chat]
 ```
 
-The entire prototype runs in the browser and sends no data to a server. The heuristic is intentionally readable so the portfolio focuses on product decisions. A production system would replace or supplement it with authenticated context, approved knowledge, monitored models, policy services, case management, and audit logging.
+## Repository map
 
-## Decision precedence
-
-```mermaid
-flowchart TD
-    A["Request received"] --> B{"Safety override?"}
-    B -- Yes --> C["P0 human route"]
-    B -- No --> D{"Customer asked for human?"}
-    D -- Yes --> E["Human support"]
-    D -- No --> F{"Two failed attempts?"}
-    F -- Yes --> G["Expert chat"]
-    F -- No --> H{"Confidence below low threshold?"}
-    H -- Yes --> I["Human triage"]
-    H -- No --> J{"Confidence below auto threshold?"}
-    J -- Yes --> K["Clarifying question"]
-    J -- No --> L{"Severity"}
-    L -- P0 --> C
-    L -- P1 --> M["Managed specialist case"]
-    L -- P2 --> N["AI self-service"]
-```
-
-## Production evolution
-
-| Prototype component | Production evolution | Required control |
-| --- | --- | --- |
-| Keyword heuristic | Calibrated intent and risk models plus deterministic policies | Model registry, versioning, calibration, drift monitoring |
-| Browser-only factors | Authenticated account and event context | Least-privilege access and data minimization |
-| Static handoff | Case-management integration | Schema validation, audit log, specialist feedback |
-| Synthetic eval set | Curated, de-identified, consented evaluation data | Governance, slice analysis, refresh cadence |
-| Adjustable thresholds | Policy configuration service | Approval workflow, rollback, shadow evaluation |
-
-## Audit record for a real system
-
-Each decision should record a request ID, timestamp, policy and model versions, predicted intent, calibrated confidence, extracted risk factors, score, override, selected route, human corrections, and final outcome. Sensitive free text should be minimized or tokenized according to an approved retention policy.
-
+| Path | What it is |
+| --- | --- |
+| `docs/index.html` | The simulator (GitHub Pages) |
+| `docs/app/engine.js` | Extraction, scoring, policy, evals, and population simulation. One module, used by the page and by Node. |
+| `docs/app/golden-set.js` | Golden and held-out eval sets |
+| `evals/run-evals.mjs` | Eval runner, regression gate, and held-out readiness assessment |
+| `evals/llm-extractor.mjs` | Optional LLM extractor, same output shape |
+| `data/` | Generated eval results |
+| `archive/original-simulator/` | The original simulator prototype, kept for comparison |
+| `archive/codex-v1/` | The first portfolio documentation and site iteration |
+| [`retrospective.md`](retrospective.md) | What changed and what was learned |
