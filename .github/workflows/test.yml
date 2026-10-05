@@ -1,0 +1,24 @@
+name: Test routing policy and evals
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run deterministic policy tests
+        run: npm test
+      - name: Run golden and held-out evals
+        run: npm run evals
+      - name: Publish synthetic results to the job summary
+        if: always()
+        run: cat data/eval-results-rules.md >> "$GITHUB_STEP_SUMMARY"
