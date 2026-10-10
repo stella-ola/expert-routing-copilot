@@ -1,6 +1,8 @@
 // Expert Routing Copilot: routing engine
 // One module shared by the web simulator (docs/index.html) and the eval runner (evals/).
 //
+import { POLICY_BY_ID, retrievePolicy } from './policies.js';
+
 // Architecture principle: understanding and deciding are separate steps.
 //   extractFeatures(message)  -> what the customer said (swappable: rules today, LLM tomorrow)
 //   decide(features, context) -> what we do about it (deterministic, auditable policy)
@@ -311,6 +313,23 @@ export function decide(f, context = {}, config = DEFAULT_CONFIG) {
     channel = 'ai_chat';
     needsCase = false;
   }
+
+  // Grounding: an AI answer must come from an approved article. No source, no answer.
+  let citation = null;
+  if (channel === 'ai_chat') {
+    // An extractor may propose an article (the LLM does). Otherwise use the keyword retriever.
+    const proposed = 'policyId' in f ? f.policyId : retrievePolicy(f.safeText);
+    const policy = proposed && POLICY_BY_ID[proposed];
+    if (policy) {
+      citation = { id: policy.id, title: policy.title, answer: policy.answer };
+      trace.push({ step: 'Source', text: `Answer grounded in ${policy.id} (${policy.title})` });
+    } else {
+      channel = 'expert_chat';
+      needsCase = true;
+      overrides.push({ type: 'human', text: 'Human involved: no approved source covers this question, so the AI does not guess' });
+      trace.push({ step: 'Source', text: 'No approved article found; handed to a person instead of guessing' });
+    }
+  }
   trace.push({ step: 'Resolution', text: HUMAN_CHANNELS.has(channel) ? 'Needs a specialist' : 'AI can handle this safely' });
   trace.push({ step: 'Channel', text: `${CHANNELS[channel]}${needsCase ? ', case opened' : ''}${channel === 'priority_callback' ? ' (specialist capacity constrained)' : ''}` });
 
@@ -326,10 +345,11 @@ export function decide(f, context = {}, config = DEFAULT_CONFIG) {
     human: HUMAN_CHANNELS.has(channel),
     needsCase,
     clarifyingQuestion,
+    citation,
     overrides,
     trace,
     handoff: buildHandoff(f, { priority, score, channel, needsCase, overrides, ctx }),
-    reply: customerReply(f, priority, channel, clarifyingQuestion),
+    reply: customerReply(f, priority, channel, clarifyingQuestion, citation),
   };
 }
 
@@ -389,8 +409,12 @@ function summarize(f) {
   return 'Intent unclear.';
 }
 
-function customerReply(f, priority, channel, q) {
+function customerReply(f, priority, channel, q, citation) {
   if (q) return q;
+  if (channel === 'ai_chat' && citation) {
+    const timing = f.flags.notPosted && f.daysAgo !== null ? `Your payment was sent ${f.daysAgo === 0 ? 'today' : f.daysAgo + ' day(s) ago'}. ` : '';
+    return `${timing}${citation.answer} [Source: ${citation.id}, ${citation.title}]`;
+  }
   if (f.flags.unsupportedLanguage) return 'I’m connecting you with a human specialist. Available language support must be confirmed by the support team.';
   const replies = {
     live_transfer: f.category === 'fraud'
@@ -422,7 +446,7 @@ export function route(message, context = {}, config = DEFAULT_CONFIG) {
 
 export function evaluate(goldenSet, config = DEFAULT_CONFIG, extractor = (msg) => extractFeatures(msg, config)) {
   const rows = goldenSet.map((c) => {
-    const f = extractor(c.message);
+    const f = extractor(c.message, c);
     const d = decide(f, c.context || {}, config);
     const ok = {
       team: d.team === c.expect.team,
@@ -430,9 +454,22 @@ export function evaluate(goldenSet, config = DEFAULT_CONFIG, extractor = (msg) =
       channel: d.channel === c.expect.channel,
     };
     ok.all = ok.team && ok.priority && ok.channel;
-    return { ...c, actual: { team: d.team, priority: d.priority, channel: d.channel, score: d.score, confidence: f.confidence }, ok };
+    // Citation is scored separately from exact match so routing numbers stay comparable across versions.
+    if (c.expect.citation) ok.citation = d.citation?.id === c.expect.citation;
+    return { ...c, actual: { team: d.team, priority: d.priority, channel: d.channel, score: d.score, confidence: f.confidence, citation: d.citation?.id ?? null }, ok, meta: f.meta };
   });
-  return { rows, summary: summarize_(rows) };
+  return { rows, summary: summarize_(rows), slices: sliceSummary(rows) };
+}
+
+/** Exact match and P0 recall for each tag, so weak spots are visible instead of averaged away. */
+export function sliceSummary(rows) {
+  const pct = (n, d) => (d ? Math.round((n / d) * 1000) / 10 : null);
+  const tags = [...new Set(rows.flatMap((r) => r.tags))].sort();
+  return tags.map((tag) => {
+    const rs = rows.filter((r) => r.tags.includes(tag));
+    const p0 = rs.filter((r) => r.expect.priority === 'P0');
+    return { tag, cases: rs.length, exactMatch: pct(rs.filter((r) => r.ok.all).length, rs.length), p0Cases: p0.length, p0Recall: pct(p0.filter((r) => r.actual.priority === 'P0').length, p0.length) };
+  });
 }
 
 function summarize_(rows) {
@@ -442,6 +479,7 @@ function summarize_(rows) {
   const predP0 = rows.filter((r) => r.actual.priority === 'P0');
   const needsHuman = rows.filter((r) => HUMAN_CHANNELS.has(r.expect.channel));
   const aiOk = rows.filter((r) => !HUMAN_CHANNELS.has(r.expect.channel));
+  const cited = rows.filter((r) => r.expect.citation);
   return {
     cases: rows.length,
     exactMatch: pct(rows.filter((r) => r.ok.all).length, rows.length),
@@ -455,6 +493,14 @@ function summarize_(rows) {
     reachedHumanWhenNeeded: pct(needsHuman.filter((r) => HUMAN_CHANNELS.has(r.actual.channel)).length, needsHuman.length),
     overEscalation: pct(aiOk.filter((r) => HUMAN_CHANNELS.has(r.actual.channel)).length, aiOk.length),
     knownGaps: rows.filter((r) => r.tags.includes('known-gap')).length,
+    // Grounding: of the questions the AI should answer itself, how often did it cite the right article?
+    citationCases: cited.length,
+    citationAccuracy: pct(cited.filter((r) => r.ok.citation).length, cited.length),
+    citationAccuracyGated: pct(cited.filter((r) => !r.tags.includes('known-gap') && r.ok.citation).length, cited.filter((r) => !r.tags.includes('known-gap')).length),
+    // The dangerous failure: the AI answered in chat, but from the wrong article (confidently wrong).
+    wrongSourceAnswers: rows.filter((r) => r.actual.channel === 'ai_chat' && r.actual.citation && r.expect.citation && r.actual.citation !== r.expect.citation).length,
+    // Answers given in chat on a case that should not have been answered in chat at all.
+    answeredWhenShouldNot: rows.filter((r) => r.actual.channel === 'ai_chat' && r.expect.channel !== 'ai_chat').length,
   };
 }
 

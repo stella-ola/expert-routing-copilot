@@ -9,9 +9,10 @@
 ## In 30 seconds
 
 - **Problem:** customers with fraud, billing, or product-support needs may be transferred, repeat themselves, wait in the wrong queue, or remain with automation too long.
-- **What I built:** a product strategy, deterministic routing policy, interactive simulator, structured handoff, 42-case eval harness, tradeoff lab, CI regression gate, rollout plan, and decision record.
+- **What I built:** a product strategy, deterministic routing policy, interactive simulator, structured handoff, grounded answers that cite approved articles, a 102-case eval harness with cost, latency, and consistency measurement, a rules-vs-LLM comparison, tradeoff lab, CI regression gate, rollout plan, and decision record.
 - **Core design decision:** the AI or rules layer **understands** the message; a deterministic, versioned policy **decides** severity and route. This keeps high-stakes decisions auditable and allows the understanding layer to improve independently.
-- **Most important result:** keyword rules reach 100% exact match on the gated cases they were tuned on but only 40% on a held-out set, with **0% held-out P0 recall**. The rules baseline is therefore **not launch-ready**. That failure is the evidence for testing a better extractor behind the same policy.
+- **Most important result:** keyword rules reach 100% exact match on the gated cases they were tuned on but only 32.9% on 70 held-out cases, catching **1 of 23 new urgent cases (4.3% P0 recall)**. The rules baseline is therefore **not launch-ready**. That failure is the evidence for testing a better extractor behind the same policy.
+- **No source, no answer:** when the AI answers in chat, it quotes an approved article and names it. If no article fits, a person answers. On held-out cases this rule caught two urgent cases the classifier had misread as routine questions.
 
 ## How it decides
 
@@ -37,16 +38,30 @@ The weighted score uses potential harm (35%), time sensitivity (30%), customer b
 
 All cases and labels are synthetic and authored for this portfolio. They demonstrate the evaluation method; they do not establish production performance.
 
-| Metric | Golden set: 32 cases | Held-out: 10 cases |
+| Metric | Golden set: 32 cases | Held-out: 70 cases |
 | --- | ---: | ---: |
-| Exact match: team + priority + channel | 87.5% | 40% |
-| Exact match excluding four declared baseline gaps | 100% | 40% |
-| P0 recall | 77.8% | **0%** |
-| Reached a human when required | 95.2% | 42.9% |
+| Exact match: team + priority + channel | 87.5% | 32.9% |
+| Exact match excluding four declared baseline gaps | 100% | 32.9% |
+| P0 recall (urgent cases caught) | 77.8% | **4.3%** |
+| Reached a human when required | 95.2% | 53.2% |
+| Citation accuracy (AI cited the right article) | 88.9% | 38.1% |
+| AI answered a case it should have routed | 0 | 7 |
 
-The CI workflow protects the tuned baseline from regression. It does **not** certify production readiness. The held-out readiness gate remains blocked until a candidate extractor achieves 100% P0 recall, at least 80% exact match, at least 98% appropriate human reach, and no new red-team failures.
+Held-out cases are tagged by risk type, so failures are visible instead of averaged away. The rules catch **0%** of implicit-fraud and multi-issue urgent cases.
+
+The CI workflow protects the tuned baseline from regression. It does **not** certify production readiness. The held-out readiness gate stays blocked until a candidate extractor reaches 100% P0 recall, at least 80% exact match, at least 98% appropriate human reach, at least 90% citation accuracy, zero chat answers on cases that needed routing, and the same decision on at least 95% of cases across three runs with zero urgency flips.
 
 [Read every result](data/eval-results-rules.md) · [Evaluation plan](docs/evaluation-plan.md) · [Failure analysis](docs/failure-analysis.md)
+
+## Rules vs LLM
+
+Same 102 cases, same deterministic policy. Only the step that reads the message changes. The table reports quality, cost per ticket, cost per **correctly routed** ticket, latency, and whether the same message gets the same decision on every run.
+
+The simulator's **Rules vs AI** tab shows the same comparison visually: metrics side by side, results by type of message, and the exact cases the AI fixed or broke.
+
+**To run the AI evals from GitHub (no terminal):** add a repository secret named `ANTHROPIC_API_KEY` (Settings → Secrets and variables → Actions), then open **Actions → Run AI (LLM) evals → Run workflow**. The workflow proposes the recorded results in a review branch and pull request. Review and merge that small results PR; the simulator tab fills in after GitHub Pages redeploys.
+
+[Rules vs LLM comparison](data/comparison.md) · [How the AI's variability is contained](docs/product-spec.md#12-ai-behavior-that-isnt-the-same-every-time-v21)
 
 ## Tradeoff lab
 
@@ -87,10 +102,11 @@ npm run evals
 npm run serve
 ```
 
-The optional LLM extractor uses the same structured feature contract and deterministic policy:
+The optional LLM extractor uses the same structured feature contract and deterministic policy. It runs every case three times to measure consistency, then builds the comparison:
 
 ```bash
 ANTHROPIC_API_KEY=your_key npm run evals:llm
+npm run compare
 ```
 
 Never place an API key in the repository. LLM output must be evaluated repeatedly on the locked held-out set before any recommendation to advance beyond shadow mode.
@@ -102,13 +118,15 @@ Never place an API key in the repository. LLM output must be evaluated repeatedl
 ├── README.md
 ├── docs/
 │   ├── index.html                 # GitHub Pages simulator and tradeoff lab
-│   ├── app/engine.js              # extraction, risk, policy, evals, simulation
-│   ├── app/golden-set.js          # 32 golden and 10 held-out cases
+│   ├── app/engine.js              # extraction, risk, policy, grounding, evals, simulation
+│   ├── app/policies.js            # 12 approved help articles and the keyword retriever
+│   ├── app/golden-set.js          # 32 golden and 70 held-out cases
 │   └── *.md                       # product and AI-PM artifacts
 ├── evals/
-│   ├── run-evals.mjs              # evaluation runner and regression gate
+│   ├── run-evals.mjs              # evaluation runner, gates, cost, latency, consistency
+│   ├── compare.mjs                # rules vs LLM side by side
 │   └── llm-extractor.mjs          # optional candidate understanding layer
-├── data/                           # generated synthetic eval results
+├── data/                           # generated synthetic eval results and comparison
 ├── tests/                          # deterministic policy tests
 └── archive/                        # preserved earlier prototypes and source spec
 ```
@@ -120,4 +138,5 @@ Never place an API key in the repository. LLM output must be evaluated repeatedl
 - The project performs no authentication, card lock, payment, refund, dispute, or other account action.
 - Targets, SLAs, cost assumptions, risk weights, and thresholds are hypotheses requiring domain, customer, operations, risk, privacy, legal, compliance, security, and accessibility review.
 - The optional LLM extractor is a candidate, not a shipped component.
+- Help articles are fictional. Model prices in `evals/llm-extractor.mjs` were checked against [Anthropic's Haiku 5.5 pricing](https://www.anthropic.com/claude-haiku-5-5) in October 2026 and must be rechecked before quoting cost figures.
 - This project is not affiliated with any company.

@@ -38,7 +38,7 @@ Choose **Prompt injection**.
 
 Open **Eval results**.
 
-“The tuned baseline looks strong on its golden set and fails badly on the held-out set: 40% exact match and zero held-out urgent-case recall. The project keeps those failures visible. CI prevents regressions, but readiness remains blocked.”
+“The tuned baseline looks strong on its golden set and fails badly on 70 held-out cases: 32.9% exact match and 1 of 23 urgent cases caught. When the AI does answer, it has to cite an approved article, and if none fits, a person answers. That rule caught two urgent cases the classifier misread as routine. The project keeps those failures visible. CI prevents regressions, but readiness remains blocked.”
 
 Highlight a stolen-wallet or implicit-fraud miss.
 

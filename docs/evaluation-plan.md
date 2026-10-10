@@ -11,19 +11,35 @@ How we know the routing is good enough to put in front of customers, and how we 
 | Golden: edge | 8 | Severity depends on circumstances (capacity, timing, hardship, human request) | Regression gate |
 | Golden: adversarial | 3 | Prompt injection, urgency without facts, sensitive data typed in | Regression gate |
 | Golden: known gaps | 4 | Documented failures (negation, ambiguity, language, implicit fraud) | Reported, never hidden |
-| Held-out | 10 | Written after tuning; never used to tune | Readiness gate for any candidate extractor |
+| Held-out v1 (H1–H10) | 10 | Written after tuning; never used to tune | Readiness gate |
+| Held-out v2.1 (H11–H70) **[v2.1]** | 60 | Written after the rules *and* the article retriever were frozen | Readiness gate, reported by slice |
+| **Total** | **102** | 21 held-out cases also carry an expected article citation | |
 
-Run: `node evals/run-evals.mjs` (rules) or `node evals/run-evals.mjs --llm` (LLM extractor, same policy). CI runs the rules evals on every push and fails if the tuned baseline regresses. A green CI check does not mean the product is ready to launch. Results: [data/eval-results-rules.md](../data/eval-results-rules.md).
+Held-out slices: fraud 20, billing 30, product 17, unclear 3; cross-cutting tags for implicit fraud, negation, ambiguity, multi-issue, adversarial, other languages, typos, and questions with no approved source. Slice results show where a model fails instead of averaging it away.
+
+**Labeling rule.** Each label is what the written policy says should happen if the message were read correctly. Labels are never copied from an extractor's output. Questions with no matching article are labeled *expert chat* (no source, no answer).
+
+Run:
+
+```bash
+npm run evals                              # rules; what CI runs
+ANTHROPIC_API_KEY=... npm run evals:llm    # LLM extractor, same policy, every case 3 times
+npm run compare                            # data/comparison.md, side by side
+```
+
+CI runs the rules evals on every push and fails if the tuned baseline regresses. A green CI check does not mean the product is ready to launch. Results: [rules](../data/eval-results-rules.md) · [comparison](../data/comparison.md).
 
 ## Current results (rules extractor)
 
-| | Golden (gated cases) | Held-out |
+| | Golden (gated cases) | Held-out (70) |
 | --- | --- | --- |
-| Exact match | 100% | 40% |
-| P0 recall | 100% | **0%** |
-| Reached a human when needed | — | 42.9% |
+| Exact match | 100% | 32.9% |
+| P0 recall | 100% | **4.3%** (1 of 23) |
+| Reached a human when needed | — | 53.2% |
+| Citation accuracy | 100% | 38.1% |
+| AI answered a case it should have routed | 0 | 7 |
 
-**Interpretation.** The rules are overfit to the phrasing they were built on. "My wallet got taken on the train," "wasn't me," and "the bank keeps rejecting my payment" all slip through. This is the strongest argument in the project for an LLM extractor, and also the reason it must be evaluated on held-out data before it ships, not on the set it was prompt-tuned against.
+**Interpretation.** The rules are overfit to the phrasing they were built on. "My purse was snatched," "wasn't me," "my autopay didn't go through" all slip past them, and they caught 0% of implicit-fraud and multi-issue urgent cases. Citations fail the same way: "signing up" triggers the sign-in article. This is the strongest argument for an LLM extractor, and the reason it must clear this same held-out set, three runs per case, before it ships.
 
 ## Regression and readiness gates
 
@@ -34,6 +50,9 @@ Run: `node evals/run-evals.mjs` (rules) or `node evals/run-evals.mjs --llm` (LLM
 | Exact match | ≥ 80% | Held-out readiness set |
 | Reached a human when needed | ≥ 98% | Held-out readiness set |
 | Over-escalation | ≤ 15% | Held-out readiness set |
+| Citation accuracy | 100% / ≥ 90% | Golden regression set / held-out readiness set **[v2.1]** |
+| AI answered a case it should have routed | 0 | Held-out readiness set **[v2.1]** |
+| Same decision on all 3 runs | ≥ 95%, and zero urgency flips | Held-out readiness set, LLM only **[v2.1]** |
 | No new red-team failures | 0 | Adversarial regression set |
 
 The rules extractor passes the tuned regression gate and fails held-out readiness. It remains a transparent learning baseline and must not control customer-facing routing.
@@ -61,8 +80,10 @@ These thresholds are proposed safety hypotheses for the portfolio. Domain, risk,
 
 ## LLM-specific checks
 
-- **Determinism.** Temperature 0; run each held-out case 3 times; flag any case whose route changes between runs.
-- **Schema validity.** Invalid or missing fields fail safe (category "unclear", which routes to a human if anything else looks wrong).
-- **Injection.** The customer message is wrapped and treated as data; injection attempts are an eval category.
-- **Cost and latency.** Track p95 extraction latency; intake must not add more than 2 seconds before the first AI reply.
-- **Version pinning.** Model version recorded on every decision; model upgrades re-run the full eval suite before rollout.
+All of these are implemented in `evals/run-evals.mjs` and `evals/llm-extractor.mjs` **[v2.1]**:
+
+- **Consistency.** Every case runs 3 times. Unstable cases and any P0 flips are listed by ID. See [product spec §12](product-spec.md#12-ai-behavior-that-isnt-the-same-every-time-v21).
+- **Schema validity.** Invalid output fails safe (category *unclear*, low confidence) and is counted as a malformed output. An invented article ID is treated as no source.
+- **Injection.** The customer message is wrapped and treated as data; injection attempts are an eval slice.
+- **Cost and latency.** Every call records latency and tokens; the report gives p50/p95 latency, cost per ticket, and cost per correctly routed ticket. Intake must not add more than 2 seconds at p95.
+- **Version pinning.** Model name recorded on every result; model upgrades re-run the full suite, including the 3-run consistency check, before rollout.
