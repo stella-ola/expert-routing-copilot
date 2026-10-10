@@ -1,6 +1,6 @@
 {
   "name": "expert-routing-copilot",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Synthetic AI support-routing product case study, simulator, and evaluation harness.",
   "private": true,
   "type": "module",

@@ -133,6 +133,7 @@ mkdirSync('data', { recursive: true });
 const out = {
   extractor,
   runs: RUNS,
+  ...(useLLM ? { ranAt: new Date().toISOString() } : {}), // rules output stays byte-stable between runs
   regressionGate: { passed: regressionPassed, checks: regressionChecks },
   readinessGate: { passed: readinessPassed, checks: readinessChecks },
   golden: golden.summary,
@@ -143,6 +144,10 @@ const out = {
   rows: [...golden.rows, ...heldout.rows].map(({ id, tags, message, expect, actual, ok, note }) => ({ id, tags, message, expect, actual, ok, note })),
 };
 writeFileSync(`data/eval-results-${extractor}.json`, JSON.stringify(out, null, 2) + '\n');
+// The simulator is served from docs/, so it reads its own copy. It shows recorded results only;
+// the browser never calls the model (an API key in a public page would be exposed).
+mkdirSync('docs/data', { recursive: true });
+writeFileSync(`docs/data/eval-results-${extractor}.json`, JSON.stringify(out) + '\n');
 
 const v = (x, unit = '%') => (x === null || x === undefined ? 'n/a' : `${x}${unit}`);
 const fmt = (s) => [

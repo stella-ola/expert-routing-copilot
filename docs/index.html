@@ -124,6 +124,23 @@ td.msg { min-width: 260px; }
 .callout { border-left: 4px solid var(--steel); background: var(--surface); padding: 14px 16px; margin: 0 0 22px; max-width: 80ch; }
 .callout p { margin: 0; }
 
+/* Rules vs AI tab */
+table.vs { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--surface); }
+table.vs th, table.vs td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+table.vs th { font-weight: 600; color: var(--muted); background: var(--soft); }
+table.vs td.n, table.vs th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.vs tr.group td { font-weight: 700; background: var(--paper); color: var(--ink); }
+.better { color: var(--p2); font-weight: 700; } .worse { color: var(--p0); font-weight: 700; }
+.vs-meta { font-size: 13px; color: var(--muted); margin: -8px 0 18px; }
+.filter { display: flex; gap: 10px; align-items: center; margin: 22px 0 10px; flex-wrap: wrap; }
+.filter label { font-size: 13px; color: var(--muted); }
+.filter select { width: auto; }
+.pending { max-width: 80ch; }
+.pending ol { padding-left: 20px; } .pending li { margin: 6px 0; }
+.pending code { background: var(--soft); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+.ai-line { font-size: 13px; color: var(--muted); border-top: 1px dashed var(--line); margin: 10px 0 0; padding-top: 8px; }
+.ai-line b { color: var(--ink); }
+
 /* Tradeoff lab */
 .lab-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
 .control { margin-bottom: 18px; }
@@ -164,6 +181,7 @@ footer { border-top: 1px solid var(--line); padding: 18px 0 30px; font-size: 13p
     <nav role="tablist" aria-label="Sections">
       <button role="tab" aria-selected="true" aria-controls="tab-route" id="t-route">Route a message</button>
       <button role="tab" aria-selected="false" aria-controls="tab-evals" id="t-evals">Eval results</button>
+      <button role="tab" aria-selected="false" aria-controls="tab-vs" id="t-vs">Rules vs AI</button>
       <button role="tab" aria-selected="false" aria-controls="tab-lab" id="t-lab">Tradeoff lab</button>
       <button role="tab" aria-selected="false" aria-controls="tab-about" id="t-about">About</button>
     </nav>
@@ -208,6 +226,7 @@ footer { border-top: 1px solid var(--line); padding: 18px 0 30px; font-size: 13p
             <div class="meter"><i id="r-meter"></i><b style="left:35%"></b><b style="left:70%"></b></div>
             <div class="meter-ticks"><span style="left:0">0</span><span style="left:35%">P1 at 35</span><span style="left:70%">P0 at 70</span><span style="left:100%">100</span></div>
             <ul class="overrides" id="r-overrides"></ul>
+            <p class="ai-line" id="r-ai" hidden></p>
           </div>
         </div>
 
@@ -240,6 +259,13 @@ footer { border-top: 1px solid var(--line); padding: 18px 0 30px; font-size: 13p
     </div>
     <h3>Every case</h3>
     <div class="scroll"><table class="cases"><thead><tr><th>ID</th><th>Set</th><th>Message</th><th>Expected</th><th>Actual</th><th>Result</th></tr></thead><tbody id="cases"></tbody></table></div>
+  </section>
+
+  <!-- RULES VS AI -->
+  <section class="panel" id="tab-vs" role="tabpanel" aria-labelledby="t-vs" hidden>
+    <h2>Rules vs AI</h2>
+    <p class="lede">Same 102 test cases, same decision policy. Only the step that reads the customer's message changes: hand-written keyword rules, or a language model with no examples (zero-shot). Rules run live in your browser. AI results are recorded from the last eval run, because a public page can't safely hold an API key.</p>
+    <div id="vs-body"></div>
   </section>
 
   <!-- LAB -->
@@ -285,6 +311,8 @@ import { GOLDEN_SET, HELDOUT_SET } from './app/golden-set.js';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const PRI_WORD = { P0: 'Urgent', P1: 'Investigate', P2: 'Routine' };
+const fmtE = (x) => `${x.team} / ${x.priority} / ${x.channel.replace('_', ' ')}${x.citation ? ' / ' + x.citation : ''}`;
+let llm = null; // recorded LLM eval results, loaded from docs/data if present
 
 // Tabs
 const tabs = [...document.querySelectorAll('[role=tab]')];
@@ -359,6 +387,14 @@ function run() {
     ['Facts gathered', h.facts.length ? `<ul>${h.facts.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : 'None yet'],
     ['Already done', `<ul>${h.actions.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`], ['AI confidence', h.confidence], ['Recommended next step', h.nextStep]];
   $('r-handoff').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v.startsWith?.('<ul>') ? v : esc(v)}</dd>`).join('');
+  const known = llm && [...GOLDEN_SET, ...HELDOUT_SET].find((c) => c.message.trim() === message);
+  const aiRow = known && llm.rows.find((r) => r.id === known.id);
+  const aiLine = $('r-ai');
+  aiLine.hidden = !aiRow;
+  if (aiRow) {
+    const same = aiRow.actual.team === d.team && aiRow.actual.priority === d.priority && aiRow.actual.channel === d.channel;
+    aiLine.innerHTML = `<b>AI version on test case ${esc(known.id)}:</b> ${esc(fmtE(aiRow.actual))}${same ? ' (same as rules)' : ''}. Correct answer: ${esc(fmtE(known.expect))}.`;
+  }
   $('r-trace').innerHTML = d.trace.map((t) => `<li><b>${t.step}.</b> ${esc(t.text)}</li>`).join('');
 }
 $('run').addEventListener('click', run);
@@ -373,8 +409,86 @@ const kset = (s) => kpi('Exact match', s.exactMatch, s.exactMatch < 80) + kpi('U
 $('k-golden').innerHTML = kset(g.summary);
 $('k-heldout').innerHTML = kset(ho.summary);
 $('eval-story').textContent = `Keyword rules hit ${g.summary.exactMatchGated}% on the cases they were tuned on (excluding ${g.summary.knownGaps} documented known gaps), but ${ho.summary.exactMatch}% on new cases, and caught ${ho.summary.p0Recall}% of new urgent cases. The baseline is transparent but not launch-ready. Of the ${ho.summary.citationCases} new questions the AI should answer itself, it cited the right article ${ho.summary.citationAccuracy}% of the time, and it answered ${ho.summary.answeredWhenShouldNot} cases in chat that needed a specialist or a case. This gap justifies evaluating a stronger extractor behind the same deterministic policy before any live automation.`;
-const fmtE = (x) => `${x.team} / ${x.priority} / ${x.channel.replace('_', ' ')}${x.citation ? ' / ' + x.citation : ''}`;
 $('cases').innerHTML = [...g.rows, ...ho.rows].map((r) => `<tr><td>${r.id}</td><td>${r.tags.join(', ')}</td><td class="msg">${esc(r.message)}${r.note ? `<span class="note">${esc(r.note)}</span>` : ''}</td><td>${fmtE(r.expect)}</td><td>${fmtE(r.actual)}</td><td class="${r.ok.all && r.ok.citation !== false ? 'pass' : 'fail'}">${!r.ok.all ? 'Miss' : r.ok.citation === false ? 'Wrong source' : 'Pass'}</td></tr>`).join('');
+
+// Rules vs AI
+const RULES = { golden: g, heldout: ho, rows: [...g.rows, ...ho.rows] };
+const pc = (x) => (x === null || x === undefined ? 'n/a' : x + '%');
+
+function drawVs() {
+  const body = $('vs-body');
+  if (!llm) {
+    body.innerHTML = `<div class="box pending"><h3>AI results not recorded yet</h3>
+      <p>The rules column is ready. To fill in the AI column, run the AI evals once:</p>
+      <ol>
+        <li>In the GitHub repo, open <b>Settings → Secrets and variables → Actions</b> and add a secret named <code>ANTHROPIC_API_KEY</code>.</li>
+        <li>Open the <b>Actions</b> tab, choose <b>Run AI (LLM) evals</b>, and click <b>Run workflow</b>.</li>
+        <li>When it finishes, review and merge the generated results pull request. This tab fills in after GitHub Pages redeploys.</li>
+      </ol>
+      <p>Or locally: <code>ANTHROPIC_API_KEY=… npm run evals:llm</code>, then commit <code>docs/data/</code>.</p></div>`;
+    return;
+  }
+  const H = (r) => r.heldout, P = llm.performance, C = llm.consistency;
+  const p0n = (rows) => { const t = rows.filter((r) => r.tags.includes('heldout') && r.expect.priority === 'P0'); return `${t.filter((r) => r.actual.priority === 'P0').length} of ${t.length}`; };
+  const cmp = (a, b, higherBetter) => (a === null || b === null || a === b ? '' : (b > a) === higherBetter ? 'better' : 'worse');
+  const row = (label, a, b, cls = '') => `<tr><td>${label}</td><td class="n">${a}</td><td class="n ${cls}">${b}</td></tr>`;
+  const ms = (x) => (x < 1 ? '&lt;1 ms' : Math.round(x).toLocaleString() + ' ms');
+  const usd = (x, d) => (x === null || x === undefined ? 'n/a' : '$' + x.toFixed(d));
+  const when = llm.ranAt ? new Date(llm.ranAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'unknown date';
+
+  const sliceTags = RULES.heldout.slices.map((x) => x.tag).filter((t) => t !== 'heldout');
+  const sl = (src, t) => src.find((x) => x.tag === t);
+  const llmRows = Object.fromEntries(llm.rows.map((r) => [r.id, r]));
+  const both = RULES.rows.map((r) => ({ r, a: llmRows[r.id] })).filter((x) => x.a);
+  const okR = (x) => x.r.ok.all, okA = (x) => x.a.ok.all;
+
+  body.innerHTML = `<p class="vs-meta">AI: ${esc(P.model)}, recorded ${esc(when)}, each case run ${llm.runs} time${llm.runs > 1 ? 's' : ''}. Synthetic data; these numbers show the method, not production performance.</p>
+    <div class="scroll"><table class="vs"><thead><tr><th>Held-out (70 new cases)</th><th class="n">Keyword rules</th><th class="n">AI (zero-shot)</th></tr></thead><tbody>
+      ${row('Urgent cases caught (P0 recall)', `${pc(RULES.heldout.summary.p0Recall)} (${p0n(RULES.rows)})`, `${pc(H(llm).p0Recall)} (${p0n(llm.rows)})`, cmp(RULES.heldout.summary.p0Recall, H(llm).p0Recall, true))}
+      ${row('Fully correct (team + priority + route)', pc(RULES.heldout.summary.exactMatch), pc(H(llm).exactMatch), cmp(RULES.heldout.summary.exactMatch, H(llm).exactMatch, true))}
+      ${row('Reached a person when needed', pc(RULES.heldout.summary.reachedHumanWhenNeeded), pc(H(llm).reachedHumanWhenNeeded), cmp(RULES.heldout.summary.reachedHumanWhenNeeded, H(llm).reachedHumanWhenNeeded, true))}
+      ${row('Sent to a person unnecessarily', pc(RULES.heldout.summary.overEscalation), pc(H(llm).overEscalation), cmp(RULES.heldout.summary.overEscalation, H(llm).overEscalation, false))}
+      ${row('Answer cited the right article', pc(RULES.heldout.summary.citationAccuracy), pc(H(llm).citationAccuracy), cmp(RULES.heldout.summary.citationAccuracy, H(llm).citationAccuracy, true))}
+      ${row('Answered in chat when it should have routed', RULES.heldout.summary.answeredWhenShouldNot, H(llm).answeredWhenShouldNot, cmp(RULES.heldout.summary.answeredWhenShouldNot, H(llm).answeredWhenShouldNot, false))}
+      <tr class="group"><td colspan="3">Cost, speed, consistency</td></tr>
+      ${row('Same decision on every run', '100% (fixed rules)', C ? pc(C.agreementPct) : 'not measured')}
+      ${row('Urgency flips between runs', 'none', C ? (C.p0Flips.length ? esc(C.p0Flips.join(', ')) : 'none') : 'not measured', C && C.p0Flips.length ? 'worse' : '')}
+      ${row('Time to read a message (typical / slowest 5%)', '&lt;1 ms', `${ms(P.latencyMsP50)} / ${ms(P.latencyMsP95)}`)}
+      ${row('Cost per 10,000 messages', '$0', usd(P.costPer10kTicketsUsd, 2))}
+      ${row('Cost per correctly routed message', '$0', usd(P.costPerCorrectRouteUsd, 5))}
+      ${row('Ready for a supervised pilot?', 'No', llm.readinessGate.passed ? 'Yes' : 'No')}
+    </tbody></table></div>
+
+    <h3 style="margin-top:26px">Where each one breaks</h3>
+    <div class="scroll"><table class="vs"><thead><tr><th>Type of message</th><th class="n">Cases</th><th class="n">Rules correct</th><th class="n">AI correct</th><th class="n">Rules urgent caught</th><th class="n">AI urgent caught</th></tr></thead><tbody>
+      ${sliceTags.map((t) => { const a = sl(RULES.heldout.slices, t), b = sl(llm.heldoutSlices, t) || {}; return `<tr><td>${esc(t)}</td><td class="n">${a.cases}</td><td class="n">${pc(a.exactMatch)}</td><td class="n ${cmp(a.exactMatch, b.exactMatch ?? null, true)}">${pc(b.exactMatch)}</td><td class="n">${a.p0Cases ? pc(a.p0Recall) : '–'}</td><td class="n ${a.p0Cases ? cmp(a.p0Recall, b.p0Recall ?? null, true) : ''}">${a.p0Cases ? pc(b.p0Recall) : '–'}</td></tr>`; }).join('')}
+    </tbody></table></div>
+
+    <div class="filter"><label for="vs-filter">Show cases</label>
+      <select id="vs-filter">
+        <option value="fixed">AI got right, rules got wrong (${both.filter((x) => okA(x) && !okR(x)).length})</option>
+        <option value="broke">Rules got right, AI got wrong (${both.filter((x) => okR(x) && !okA(x)).length})</option>
+        <option value="bothwrong">Both wrong (${both.filter((x) => !okR(x) && !okA(x)).length})</option>
+        <option value="all">All (${both.length})</option>
+      </select></div>
+    <div class="scroll"><table class="cases"><thead><tr><th>ID</th><th>Message</th><th>Correct answer</th><th>Rules</th><th>AI</th></tr></thead><tbody id="vs-cases"></tbody></table></div>`;
+
+  const drawCases = () => {
+    const f = $('vs-filter').value;
+    const pick = { fixed: (x) => okA(x) && !okR(x), broke: (x) => okR(x) && !okA(x), bothwrong: (x) => !okR(x) && !okA(x), all: () => true }[f];
+    const cell = (ok, a) => `<td class="${ok ? 'pass' : 'fail'}">${esc(fmtE(a))}</td>`;
+    const rows = both.filter(pick);
+    $('vs-cases').innerHTML = rows.length ? rows.map((x) => `<tr><td>${x.r.id}</td><td class="msg">${esc(x.r.message)}</td><td>${esc(fmtE(x.r.expect))}</td>${cell(okR(x), x.r.actual)}${cell(okA(x), x.a.actual)}</tr>`).join('') : '<tr><td colspan="5">No cases.</td></tr>';
+  };
+  $('vs-filter').addEventListener('change', drawCases);
+  drawCases();
+}
+
+fetch('data/eval-results-llm.json', { cache: 'no-cache' })
+  .then((r) => (r.ok ? r.json() : null))
+  .then((d) => { if (d && Array.isArray(d.rows)) llm = d; })
+  .catch(() => {})
+  .finally(() => { drawVs(); run(); });
 
 // Lab
 const L = { thr: $('l-thr'), noise: $('l-noise'), cap: $('l-cap'), ovr: $('l-ovr') };

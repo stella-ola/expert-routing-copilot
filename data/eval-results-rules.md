@@ -63,7 +63,7 @@ The regression gate prevents changes from breaking the tuned baseline. Held-out 
 | --- | --- |
 | Extractor | Keyword rules (runs locally) |
 | Calls measured | 102 |
-| Latency, mean / p50 / p95 | 0.087 / 0.011 / 0.225 ms |
+| Latency, mean / p50 / p95 | 0.049 / 0.009 / 0.183 ms |
 | Tokens per ticket, in / out | 0 / 0 |
 | Cost per ticket | $0.00000 |
 | Cost per 10,000 tickets | $0.00 |

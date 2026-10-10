@@ -57,6 +57,10 @@ The CI workflow protects the tuned baseline from regression. It does **not** cer
 
 Same 102 cases, same deterministic policy. Only the step that reads the message changes. The table reports quality, cost per ticket, cost per **correctly routed** ticket, latency, and whether the same message gets the same decision on every run.
 
+The simulator's **Rules vs AI** tab shows the same comparison visually: metrics side by side, results by type of message, and the exact cases the AI fixed or broke.
+
+**To run the AI evals from GitHub (no terminal):** add a repository secret named `ANTHROPIC_API_KEY` (Settings → Secrets and variables → Actions), then open **Actions → Run AI (LLM) evals → Run workflow**. The workflow proposes the recorded results in a review branch and pull request. Review and merge that small results PR; the simulator tab fills in after GitHub Pages redeploys.
+
 [Rules vs LLM comparison](data/comparison.md) · [How the AI's variability is contained](docs/product-spec.md#12-ai-behavior-that-isnt-the-same-every-time-v21)
 
 ## Tradeoff lab

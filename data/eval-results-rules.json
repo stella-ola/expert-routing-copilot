@@ -217,9 +217,9 @@
   "performance": {
     "calls": 102,
     "model": "rules (local)",
-    "latencyMsMean": 0.087,
-    "latencyMsP50": 0.011,
-    "latencyMsP95": 0.225,
+    "latencyMsMean": 0.049,
+    "latencyMsP50": 0.009,
+    "latencyMsP95": 0.183,
     "inputTokensMean": 0,
     "outputTokensMean": 0,
     "costPerTicketUsd": 0,
