@@ -61,6 +61,7 @@ select { width: 100%; font: 14px var(--font); color: var(--ink); background: var
 .bubble { padding: 11px 13px; border-radius: 12px; margin: 8px 0; max-width: 92%; font-size: 14px; }
 .bubble.customer { margin-left: auto; background: var(--soft); border-bottom-right-radius: 3px; }
 .bubble.ai { background: transparent; border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+.bubble .src { display: block; margin-top: 8px; padding-top: 7px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--muted); }
 .who { font-size: 12px; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chip { font-size: 12px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
@@ -301,6 +302,7 @@ tabs.forEach((t, i) => {
 const PRESETS = [
   ['Stolen card, new charges', 'S1'], ['Old unfamiliar charge', 'S2'], ['Payment within window', 'S3'], ['Payment not posted', 'S4'],
   ['Payment failing on due date', 'S5'], ['Password, 2 failed tries', 'S6'], ['Account takeover', 'C1'], ['Prompt injection', 'A1'], ['Card number typed', 'A3'], ['Spanish message', 'K3'],
+  ['Answer cites a policy', 'C8'], ['No approved source', 'H65'],
 ];
 const byId = Object.fromEntries([...GOLDEN_SET, ...HELDOUT_SET].map((c) => [c.id, c]));
 $('presets').innerHTML = PRESETS.map(([label, id]) => `<button data-id="${id}">${esc(label)}</button>`).join('');
@@ -321,7 +323,14 @@ function run() {
   const { features: f, decision: d } = route(message, context);
 
   $('b-customer').textContent = f.safeText;
-  $('b-ai').textContent = d.reply;
+  const bubble = $('b-ai');
+  bubble.textContent = d.citation ? d.reply.replace(/ \[Source:[^\]]*\]$/, '') : d.reply;
+  if (d.citation) {
+    const src = document.createElement('span');
+    src.className = 'src';
+    src.textContent = `Source: ${d.citation.id}, ${d.citation.title} (approved article)`;
+    bubble.appendChild(src);
+  }
   $('signals').innerHTML = [
     ...f.signals.map((s) => `<span class="chip${s.id === 'manipulation' ? ' warn' : ''}">${esc(s.label)}</span>`),
     ...f.redacted.map((r) => `<span class="chip warn">Sensitive number removed</span>`),
@@ -360,12 +369,12 @@ run();
 // Evals
 const g = evaluate(GOLDEN_SET), ho = evaluate(HELDOUT_SET);
 const kpi = (label, v, bad) => `<div class="kpi${bad ? ' bad' : ''}"><b>${v === null ? 'n/a' : v + '%'}</b><span>${label}</span></div>`;
-const kset = (s) => kpi('Exact match', s.exactMatch, s.exactMatch < 80) + kpi('Urgent cases caught (P0 recall)', s.p0Recall, s.p0Recall < 100) + kpi('Reached a human when needed', s.reachedHumanWhenNeeded, s.reachedHumanWhenNeeded < 95) + kpi('Over-escalation', s.overEscalation, s.overEscalation > 15);
+const kset = (s) => kpi('Exact match', s.exactMatch, s.exactMatch < 80) + kpi('Urgent cases caught (P0 recall)', s.p0Recall, s.p0Recall < 100) + kpi('Reached a human when needed', s.reachedHumanWhenNeeded, s.reachedHumanWhenNeeded < 95) + kpi('Over-escalation', s.overEscalation, s.overEscalation > 15) + kpi('Answers cite the right article', s.citationAccuracy, s.citationAccuracy < 90);
 $('k-golden').innerHTML = kset(g.summary);
 $('k-heldout').innerHTML = kset(ho.summary);
-$('eval-story').textContent = `Keyword rules hit ${g.summary.exactMatchGated}% on the cases they were tuned on (excluding ${g.summary.knownGaps} documented known gaps), but ${ho.summary.exactMatch}% on new cases, and caught ${ho.summary.p0Recall}% of new urgent cases. The baseline is transparent but not launch-ready. This gap justifies evaluating a stronger extractor behind the same deterministic policy before any live automation.`;
-const fmtE = (x) => `${x.team} / ${x.priority} / ${x.channel.replace('_', ' ')}`;
-$('cases').innerHTML = [...g.rows, ...ho.rows].map((r) => `<tr><td>${r.id}</td><td>${r.tags.join(', ')}</td><td class="msg">${esc(r.message)}${r.note ? `<span class="note">${esc(r.note)}</span>` : ''}</td><td>${fmtE(r.expect)}</td><td>${fmtE(r.actual)}</td><td class="${r.ok.all ? 'pass' : 'fail'}">${r.ok.all ? 'Pass' : 'Miss'}</td></tr>`).join('');
+$('eval-story').textContent = `Keyword rules hit ${g.summary.exactMatchGated}% on the cases they were tuned on (excluding ${g.summary.knownGaps} documented known gaps), but ${ho.summary.exactMatch}% on new cases, and caught ${ho.summary.p0Recall}% of new urgent cases. The baseline is transparent but not launch-ready. Of the ${ho.summary.citationCases} new questions the AI should answer itself, it cited the right article ${ho.summary.citationAccuracy}% of the time, and it answered ${ho.summary.answeredWhenShouldNot} cases in chat that needed a specialist or a case. This gap justifies evaluating a stronger extractor behind the same deterministic policy before any live automation.`;
+const fmtE = (x) => `${x.team} / ${x.priority} / ${x.channel.replace('_', ' ')}${x.citation ? ' / ' + x.citation : ''}`;
+$('cases').innerHTML = [...g.rows, ...ho.rows].map((r) => `<tr><td>${r.id}</td><td>${r.tags.join(', ')}</td><td class="msg">${esc(r.message)}${r.note ? `<span class="note">${esc(r.note)}</span>` : ''}</td><td>${fmtE(r.expect)}</td><td>${fmtE(r.actual)}</td><td class="${r.ok.all && r.ok.citation !== false ? 'pass' : 'fail'}">${!r.ok.all ? 'Miss' : r.ok.citation === false ? 'Wrong source' : 'Pass'}</td></tr>`).join('');
 
 // Lab
 const L = { thr: $('l-thr'), noise: $('l-noise'), cap: $('l-cap'), ovr: $('l-ovr') };
