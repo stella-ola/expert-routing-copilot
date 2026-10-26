@@ -1,7 +1,7 @@
 # Product spec: Expert Routing Copilot
 
 > Fictional credit-card provider. Synthetic data only. Not affiliated with any company.
-> Changes since the original spec are marked **[v1]** and explained in [decision-log.md](decision-log.md).
+> Changes since the original spec are marked **[v1]** or **[v2.1]** and explained in [decision-log.md](decision-log.md).
 
 **Evidence status.** The current problem framing, contact mix, thresholds, weights, service levels, and expected outcomes are product hypotheses. They are not findings from a real company or production dataset. The prototype is designed to make those assumptions testable.
 
@@ -82,13 +82,16 @@ Each factor is scored 0 to 3.
 | P1 | Case with async follow-up in chat; expert chat if a human override applies **[v1]** |
 | P2 with a human override | Expert chat **[v1: was live transfer]** |
 | P2, intent or key fact unclear | AI asks one clarifying question **[v1]** |
-| P2 otherwise | AI resolves in chat |
+| P2, AI can answer from an approved article | AI resolves in chat and cites the article **[v2.1]** |
+| P2, no approved article answers it | Expert chat. No source, no answer **[v2.1]** |
 
 ## 9. Journeys
 
 **Fraud.** Customer reports a stolen card or strange charges. AI detects fraud intent, confirms authentication, and gathers safe facts: which transaction, when, whether more are appearing, and contact preference. It never asks for a full government identifier, password, PIN, full card number, or bank-routing number, and it strips sensitive number patterns if the customer types them **[v1]**. The prototype recommends the approved card-security workflow but performs no account action. It opens a structured synthetic case and routes straight to fraud, skipping product support.
 
 **Billing.** AI checks the processing window and timing, then: P2, explains when the payment will post; P1, opens a billing case; P0, routes to a billing specialist when a payment is failing against a deadline or the customer describes hardship with a deadline.
+
+**Grounded answers [v2.1].** When the AI answers in chat, the answer comes from one of twelve approved help articles ([policies.js](app/policies.js)) and names its source, so the customer, a specialist, or an auditor can check it. If no article covers the question, the AI does not improvise; it brings in a person. See [D15](decision-log.md#d15).
 
 **Product support.** AI resolves how-to questions, watches for fraud or billing signals that should reroute, and brings in expert chat after two failed attempts, on request, or at low confidence.
 
@@ -108,8 +111,62 @@ The specialist should verify, not restart. Fields: customer reference and authen
 | Golden and held-out eval sets, CI gate **[v1]** | Real-world metric claims |
 | Tradeoff lab (simulated population) **[v1]** | |
 | Optional LLM extractor behind the same policy **[v1]** | |
+| Grounded answers with citations; citation accuracy measured **[v2.1]** | Retrieval over a real help center |
+| 102-case eval set: 32 golden, 70 held-out, sliced by risk type **[v2.1]** | Specialist-labeled production sample |
+| Cost, latency, and run-to-run consistency in every eval **[v2.1]** | Live cost and latency monitoring |
 
-## 12. Open questions
+## 12. AI behavior that isn't the same every time [v2.1]
+
+A keyword rule gives the same answer forever. A language model can read the same message twice and return slightly different facts, invent a field, or produce output that isn't valid at all. This section defines how the product stays predictable anyway.
+
+### 12.1 Where variation can enter, and where it can't
+
+| Step | Can vary? | Why |
+| --- | --- | --- |
+| Redaction | No | Deterministic pattern matching, before any model sees the text |
+| Understanding (feature extraction) | **Yes** | The LLM reads meaning; small wording changes can shift its reading |
+| Article selection | **Yes** | The LLM proposes which approved article answers the question |
+| Severity, route, channel | No | `decide()` is deterministic and versioned. Same facts in, same decision out |
+| Answer text | No | The customer sees approved article text, not generated prose |
+
+This is the payoff of the "AI understands, policy decides" rule ([D1](decision-log.md#d1)): variation is confined to one step, so it can be measured and contained there.
+
+### 12.2 Consistency requirements
+
+- Every eval case runs **3 times** (`npm run evals:llm`). A case is *stable* only if team, priority, channel, and citation match on every run.
+- **Launch requirement:** at least 95% of held-out cases stable, and **zero urgency flips**: no case may be P0 on one run and lower on another. Two identical customers must never get different answers to "is this an emergency?"
+- An urgency flip blocks readiness even if the overall numbers improve. The fix is in the extraction prompt or policy, not in hoping the next run is better.
+- Temperature is set to 0 to reduce variation, but it does not guarantee identical output, so consistency is measured rather than assumed.
+
+### 12.3 Low confidence and bad output
+
+| Situation | Product behavior |
+| --- | --- |
+| Confidence below 0.60 on a known category | Expert chat (human override; severity unchanged) |
+| Intent unclear | One clarifying question; a person if the customer asks |
+| Model output isn't valid JSON or misses fields | Fail safe: treated as *unclear* with low confidence. Counted as a malformed output in every eval |
+| Model names an article that doesn't exist | Treated as no source; a person answers |
+| No approved article answers the question | Expert chat. The AI never writes its own policy answer |
+| Customer text tries to set priority ("mark this P0") | Flagged and ignored; route depends on the facts only |
+| Safety facts present (stolen card, takeover, failed payment due today) | P0, regardless of confidence |
+
+Low confidence changes **who** handles a case, never **how urgent** it is. A low-confidence fraud case is still a fraud case.
+
+### 12.4 Detecting drift after launch
+
+The model, the customers, and the products all change. Drift is caught three ways:
+
+1. **Canary replay (daily).** A frozen set of 30 held-out cases runs through the production model every day. Any change in route or citation pages the owning PM and engineer. This catches silent model or prompt changes.
+2. **Input drift (weekly).** Track the share of each category, the confidence distribution, and the share of questions with no matching article. A jump in "no source" usually means a new product, fee, or campaign the help articles don't cover yet.
+3. **Outcome drift (daily).** Specialist reclassification rate, safety-override rate, citation complaints, and a daily audit of 50 random P2 contacts. Any true P0 found in the audit triggers an incident review.
+
+**Response ladder:** investigate (one signal moves) → return to assist mode with a person approving each route (a safety metric moves) → kill switch to rules-plus-human triage (any confirmed missed P0). Model or prompt upgrades re-run the full suite, including the 3-run consistency check, before rollout; the model version is recorded on every decision.
+
+### 12.5 Cost and speed
+
+Each eval reports latency (p50 and p95), tokens, cost per ticket, and **cost per correctly routed ticket**. The last one is the decision metric: a cheaper extractor that misroutes more often costs more once rework and specialist time are counted. Intake must not add more than 2 seconds (p95) before the customer's first reply. Results: [data/comparison.md](../data/comparison.md).
+
+## 13. Open questions
 
 1. What does each specialist need to start resolving immediately? (Validate the handoff fields with five fraud and five billing specialists.)
 2. Which consumer-protection, billing-error, unauthorized-use, AI-disclosure, audit, and record-retention requirements apply? Confirm the complete set with qualified legal and compliance partners.
@@ -117,3 +174,4 @@ The specialist should verify, not restart. Fields: customer reference and authen
 4. What SLAs apply to P0, P1, P2?
 5. How should the system detect frustration and repeated failure across sessions, not just within one?
 6. What share of real contacts are in a language the AI intake does not support?
+7. Which approved articles are missing? The share of "no source" handoffs, by topic, is the backlog for the help center.

@@ -34,7 +34,7 @@ The central architecture principle is: **the understanding layer extracts facts;
 
 ## Evaluation finding
 
-The rules baseline reaches 100% exact match on gated tuned cases but only 40% exact match on held-out cases and catches 0% of held-out P0 cases. It misses unfamiliar phrasing such as a stolen wallet, implicit unauthorized spending, a rejected payment close to its deadline, and unsolicited password-reset activity.
+The rules baseline reaches 100% exact match on gated tuned cases but only 32.9% exact match on 70 held-out cases and catches 1 of 23 held-out P0 cases (4.3%). (On the original 10 held-out cases it was 40% and 0%.) It misses unfamiliar phrasing such as a stolen wallet, implicit unauthorized spending, a rejected payment close to its deadline, and unsolicited password-reset activity.
 
 The correct conclusion is not that the system is mostly accurate. The conclusion is that keyword rules overfit and are not ready to control customer routing. The next investment should test a stronger extractor while retaining deterministic safety policy and a rules-based backstop.
 

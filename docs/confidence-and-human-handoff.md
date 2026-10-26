@@ -21,6 +21,8 @@ The following decisions do not depend on confidence:
 - active unauthorized activity, account takeover, exposed lost or stolen card, or imminent financial harm → P0 human path;
 - explicit customer request for a person → human path;
 - two failed automation attempts → human path;
+- no approved article answers the question → human path (no source, no answer; severity unchanged);
+- malformed or invalid model output → treated as unclear with low confidence, never as a confident answer;
 - missing required authentication or policy constraint in a real system → approved safe fallback.
 
 ## Threshold selection

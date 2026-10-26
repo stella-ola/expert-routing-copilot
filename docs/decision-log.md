@@ -135,3 +135,41 @@ Each entry: the decision, the options, what I chose, and what I gave up. Format 
 **Chose:** label all evaluation, population, queue, cost, SLA, and prioritization numbers as synthetic assumptions or proposed targets.
 
 **Gave up:** stronger-looking business claims. Accepted because the project has not used real customers, specialists, operational data, or production systems.
+
+---
+
+### D15. No source, no answer <a id="d15"></a>
+
+**Context.** In v1 the AI's chat replies were generic text. A support answer about payments, fees, or security is a policy statement; if it's wrong, the customer acts on it.
+
+**Chose:** every answer the AI gives in chat comes from one of twelve approved articles and cites it. If no article answers the question, the case goes to a person (expert chat) at the same severity.
+
+**Gave up:** coverage. Questions the help center doesn't cover (paperless statements, crypto purchases) now reach a person instead of getting a plausible-sounding reply. Accepted because a wrong policy answer is worse than a short wait, and the "no source" rate becomes a measured backlog for the help center.
+
+**Evidence it earns its place.** On the held-out set, the keyword rules misread two urgent cases as routine questions: H30 (hardship, payment due today) and H65 (a charge the customer could not have made). Neither matched an article, so both reached a person instead of getting a guessed answer. The rule caught failures the classifier missed.
+
+---
+
+### D16. Score citations separately from routing
+
+**Chose:** citation accuracy is its own metric, alongside two failure counts: *answered from the wrong article* and *answered in chat when the case needed a specialist or a case*.
+
+**Gave up:** one headline number. Accepted because folding citations into exact match would make v2.1 routing numbers incomparable with v1, and because "confidently wrong" is a different failure from "misrouted." Example: the rules read "I don't remember **signing up** for a subscription" as a sign-in question and answered it with the password article (H13).
+
+---
+
+### D17. Grow the held-out set to 70, written after the rules and retriever were frozen
+
+**Context.** A 10-case held-out set made the v1 finding (40% vs 100%) striking but fragile. One case was worth 10 points.
+
+**Chose:** 60 new held-out cases, each tagged by risk type (implicit fraud, negation, multi-issue, adversarial, other languages, typos, questions with no source). The keyword retriever and the policy articles were written before these cases and were not adjusted after seeing results. Labels come from the written policy, not from what any extractor produced.
+
+**Gave up:** a flattering trend. Held-out exact match for the rules fell from 40% to 32.9%, and P0 recall is 4.3% (1 of 23). Accepted because the larger set is the more honest estimate, and slice results show where the failures concentrate (implicit fraud 0%, multi-issue 0%).
+
+---
+
+### D18. Decide on cost per correct route, not cost per ticket
+
+**Chose:** every eval reports latency, tokens, cost per ticket, and cost per *correctly routed* ticket, plus run-to-run consistency for the LLM.
+
+**Gave up:** the simplest comparison ("rules are free"). Accepted because a free extractor that misses 22 of 23 urgent cases is not cheap once harm, rework, and specialist time are counted. Cost is a tradeoff to show, not a tiebreaker to hide.

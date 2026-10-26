@@ -19,6 +19,8 @@ jobs:
         run: npm test
       - name: Run golden and held-out evals
         run: npm run evals
+      - name: Build rules-vs-LLM comparison (LLM column uses the committed results, if any)
+        run: npm run compare
       - name: Publish synthetic results to the job summary
         if: always()
-        run: cat data/eval-results-rules.md >> "$GITHUB_STEP_SUMMARY"
+        run: cat data/eval-results-rules.md data/comparison.md >> "$GITHUB_STEP_SUMMARY"

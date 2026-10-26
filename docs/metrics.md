@@ -52,6 +52,12 @@ Time to resolution (no repeat within 7 days)
 | Per-team precision and recall | Fraud recall matters most; billing-vs-fraud confusion is the expensive error. |
 | Confidence calibration | When the AI says 90%, is it right 90% of the time? Uncalibrated confidence makes the low-confidence override meaningless. |
 | Override rate | How often safety and human overrides fire. A sudden change means the extractor or the traffic changed. |
+| Citation accuracy **[v2.1]** | Of questions the AI should answer itself, how often it cites the right approved article. Target ≥ 90% on held-out. |
+| Wrong-source answers **[v2.1]** | The AI answered from an article that doesn't fit. Confidently wrong is worse than "let me get someone." |
+| Answered when it shouldn't **[v2.1]** | The AI replied in chat on a case that needed a specialist or a case. Target: 0. |
+| Run-to-run consistency **[v2.1]** | Same message, same decision. ≥ 95% stable across 3 runs, and zero urgency flips. |
+| Cost per correctly routed ticket **[v2.1]** | Cost per ticket divided by the share routed exactly right. Compares extractors on value, not price. |
+| No-source rate **[v2.1]** | Share of questions with no approved article. Rising = help-center gap or new product, not a model problem. |
 
 **Why not just "accuracy"?** Errors are asymmetric. Calling a billing question fraud costs a few specialist minutes. Calling a stolen card a billing question can cost the customer money and the company trust. A single accuracy number hides exactly the error that matters.
 
