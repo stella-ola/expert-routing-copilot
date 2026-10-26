@@ -75,8 +75,8 @@ jobs:
       - name: Show results on the run page
         if: always()
         run: |
-          [ -f data/comparison.md ] && cat data/comparison.md >> "$GITHUB_STEP_SUMMARY"
-          [ -f data/eval-results-llm.md ] && cat data/eval-results-llm.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -f data/comparison.md ]; then cat data/comparison.md >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -f data/eval-results-llm.md ]; then cat data/eval-results-llm.md >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Save results to a review branch and open a pull request
         env:
