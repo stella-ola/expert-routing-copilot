@@ -69,7 +69,7 @@ export async function llmExtract(message, { apiKey = process.env.ANTHROPIC_API_K
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model, max_tokens: 700, temperature: 0, system: SYSTEM, messages: [{ role: 'user', content: `<customer_message>\n${safeText}\n</customer_message>` }] }),
+    body: JSON.stringify({ model, max_tokens: 700, body: JSON.stringify({ model, max_tokens: 700, system: SYSTEM, system: SYSTEM, messages: [{ role: 'user', content: `<customer_message>\n${safeText}\n</customer_message>` }] }),
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
   const data = await res.json();
